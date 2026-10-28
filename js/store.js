@@ -9,7 +9,7 @@
   var useFirebase = !!(cfg && cfg.apiKey && window.firebase);
 
   var DEFAULT_SHOP = {
-    name: "Tiệm trà của bạn",
+    name: "Tiệm trà Duy Khánh",
     tagline: "Trà trái cây · Trà sữa · Sữa chua",
     notice: "",
     address: "Số nhà, đường, phường, quận/huyện, tỉnh/thành",
