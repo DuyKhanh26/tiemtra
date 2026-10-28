@@ -8,4 +8,4 @@
  *  Chọn tên topic DÀI và KHÓ ĐOÁN (người biết tên này có thể xem thông báo đơn),
  *  ví dụ: "tiemtra-k7x92mfq-2026". Để trống "" nếu không dùng.
  * ============================================================ */
-window.NTFY_TOPIC = "";
+window.NTFY_TOPIC = "duykhanhdeptrainhat";
