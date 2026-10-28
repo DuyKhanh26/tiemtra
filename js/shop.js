@@ -141,7 +141,7 @@
       '<div class="total"><span>Tổng cộng</span><span>' + money(t.total) + "</span></div>" +
       '<label class="f">Tên của bạn *</label><input id="cName" autocomplete="name" value="' + esc(checkoutInfo.name || "") + '" placeholder="Nguyễn Văn A">' +
       '<label class="f">Số điện thoại *</label><input id="cPhone" type="tel" autocomplete="tel" value="' + esc(checkoutInfo.phone || "") + '" placeholder="09xx xxx xxx">' +
-      '<label class="f">Hình thức nhận</label><select id="cMethod">' + opt(["Mang đi", "Uống tại quán", "Giao hàng (Grab/Be…)"], m) + "</select>" +
+      '<label class="f">Hình thức nhận</label><select id="cMethod">' + opt(["Mang đi", "Uống tại quán", "Giao hàng (Đảm bảo bạn đã gọi và quán đã đồng ý)"], m) + "</select>" +
       '<div id="addrBox" class="' + (m.indexOf("Giao") === 0 ? "" : "hidden") + '"><label class="f">Địa chỉ giao hàng *</label><input id="cAddr" autocomplete="street-address" value="' + esc(checkoutInfo.address || "") + '" placeholder="Số nhà, đường, phường…"></div>' +
       '<label class="f">Ghi chú</label><textarea id="cNote" placeholder="Ví dụ: ít ngọt, thêm trân châu…"></textarea>' +
       '<div style="height:14px"></div><button class="btn block" data-act="submit">Hoàn tất đặt món</button>';
