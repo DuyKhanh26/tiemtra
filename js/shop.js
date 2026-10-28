@@ -147,6 +147,27 @@
       '<div style="height:14px"></div><button class="btn block" data-act="submit">Hoàn tất đặt món</button>';
   }
 
+  /* Báo đơn mới về điện thoại chủ quán qua ntfy (không kèm tên/SĐT khách) */
+  function pushNotify(order) {
+    var topic = String(window.NTFY_TOPIC || "").trim();
+    if (!topic) return;
+    try {
+      var text = order.items.map(function (i) { return i.name + " ×" + i.qty; }).join(", ");
+      if (text.length > 180) text = text.slice(0, 177) + "…";
+      fetch("https://ntfy.sh", {
+        method: "POST",
+        body: JSON.stringify({
+          topic: topic,
+          title: "🔔 Đơn mới #" + order.code + " – " + money(order.total),
+          message: text + " (" + order.method + ")",
+          priority: 5,
+          tags: ["bell"],
+          click: new URL("admin.html", location.href).href
+        })
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   function submitOrder() {
     var name = $("#cName").value.trim();
     var phone = $("#cPhone").value.trim();
@@ -170,6 +191,7 @@
     checkoutInfo = { name: name, phone: phone, method: method, address: addr }; saveInfo();
     var btn = document.querySelector('[data-act="submit"]'); btn.disabled = true; btn.textContent = "Đang gửi…";
     Store.addOrder(order).then(function () {
+      pushNotify(order);
       cart = {}; saveCart();
       $("#cartBody").setAttribute("data-view", "done");
       $("#cartBody").innerHTML = '<button class="x" data-act="close">✕</button><div class="success"><div class="big">🎉</div><h2>Đặt món thành công!</h2>' +

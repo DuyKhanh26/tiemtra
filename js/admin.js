@@ -28,8 +28,72 @@
   function stopListening() {
     if (unsubShop) { unsubShop(); unsubShop = null; }
     if (unsubOrders) { unsubOrders(); unsubOrders = null; }
-    draft = saved = null; dirty = false; orders = [];
+    draft = saved = null; dirty = false; orders = []; seen = null;
   }
+
+  /* ---------- Chuông + thông báo đơn mới ---------- */
+  var seen = null, ac = null, wl = null, baseTitle = "Quản lý quán";
+  var soundOn = false;
+  try { soundOn = localStorage.getItem("tra_sound") === "1"; } catch (e) {}
+
+  function audio() {
+    if (!ac) { var C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
+    if (ac && ac.state === "suspended") ac.resume();
+    return ac;
+  }
+  function beep() {
+    if (!soundOn) return;
+    var a = audio(); if (!a) return;
+    [0, 0.28, 0.56].forEach(function (d, i) {
+      var o = a.createOscillator(), g = a.createGain(), t = a.currentTime + d;
+      o.type = "sine"; o.frequency.value = i === 1 ? 1175 : 880;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+      o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 0.26);
+    });
+  }
+  function keepAwake(on) {
+    try {
+      if (on && navigator.wakeLock) navigator.wakeLock.request("screen").then(function (l) { wl = l; }, function () {});
+      else if (wl) { wl.release(); wl = null; }
+    } catch (e) {}
+  }
+  function renderBell() {
+    $("#bellBtn").textContent = soundOn ? "🔔 Chuông: Bật" : "🔕 Chuông: Tắt";
+  }
+  $("#bellBtn").addEventListener("click", function () {
+    soundOn = !soundOn;
+    try { localStorage.setItem("tra_sound", soundOn ? "1" : "0"); } catch (e) {}
+    if (soundOn) {
+      audio(); beep(); keepAwake(true);
+      try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch (e) {}
+      toast("Đã bật chuông. Giữ trang này mở để nghe chuông khi có đơn.");
+    } else keepAwake(false);
+    renderBell();
+  });
+  document.addEventListener("pointerdown", function () { if (soundOn) audio(); });
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible" && soundOn) keepAwake(true); });
+  renderBell();
+
+  function detectNew(list) {
+    if (seen === null) { seen = {}; list.forEach(function (o) { seen[o.id] = 1; }); return; }
+    var fresh = list.filter(function (o) { return !seen[o.id] && o.status === "new"; });
+    list.forEach(function (o) { seen[o.id] = 1; });
+    if (!fresh.length) return;
+    beep();
+    toast("🔔 Có " + fresh.length + " đơn mới!");
+    try {
+      if ("Notification" in window && Notification.permission === "granted") {
+        var o = fresh[0];
+        new Notification("🔔 Đơn mới #" + (o.code || ""), { body: (o.items || []).map(function (i) { return i.name + " ×" + i.qty; }).join(", "), tag: "tra-order" });
+      }
+    } catch (e) {}
+  }
+  // Nhắc lại mỗi 20 giây khi còn đơn chờ xử lý
+  setInterval(function () {
+    if (soundOn && orders.some(function (o) { return o.status === "new"; })) beep();
+  }, 20000);
   function showApp(user) {
     $("#loginView").classList.add("hidden");
     $("#appView").classList.remove("hidden");
@@ -42,7 +106,7 @@
       });
     }
     if (!unsubOrders) {
-      unsubOrders = Store.subscribeOrders(function (list) { orders = list; renderRevenue(); });
+      unsubOrders = Store.subscribeOrders(function (list) { detectNew(list); orders = list; renderRevenue(); });
     }
   }
 
@@ -217,6 +281,7 @@
       '<div class="stat"><small>Số ly/phần đã bán</small><b>' + cups + "</b></div>" +
       '<div class="stat"><small>Đơn chờ xử lý</small><b>' + pending + "</b></div>";
     var nb = $("#newBadge"); nb.textContent = pending; nb.classList.toggle("hidden", pending === 0);
+    document.title = pending ? "(" + pending + ") 🔔 Đơn mới – " + baseTitle : baseTitle;
 
     // Biểu đồ 7 ngày
     var days = [], today = startOfDay(Date.now());
