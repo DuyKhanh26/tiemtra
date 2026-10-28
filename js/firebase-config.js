@@ -19,4 +19,12 @@ window.OWNER_EMAIL = "duykhanh2605.pq@gmail.com";
 //   messagingSenderId: "123456789",
 //   appId: "1:123456789:web:abcdef"
 // };
-window.FIREBASE_CONFIG = null;
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAY_LANIu9_AIMLBHzzrFMnVpxKIFYbJyI",
+  authDomain: "tiemtra-16980.firebaseapp.com",
+  projectId: "tiemtra-16980",
+  storageBucket: "tiemtra-16980.firebasestorage.app",
+  messagingSenderId: "353283824855",
+  appId: "1:353283824855:web:e550b137d9cda6ae1a6492"
+};
+
