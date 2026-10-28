@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Quản lý quán</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Màn hình đăng nhập -->
+  <section id="loginView" class="hidden">
+    <div class="login-box">
+      <div class="big">🔐</div>
+      <h2>Trang chủ quán</h2>
+      <p style="color:var(--muted)">Đăng nhập bằng tài khoản Google của chủ quán để quản lý.</p>
+      <button class="btn block" id="loginBtn">Đăng nhập với Google</button>
+      <div class="err hidden" id="loginErr"></div>
+      <div class="demo hidden" id="demoNote">Đang ở CHẾ ĐỘ DEMO (chưa cấu hình Firebase): dữ liệu chỉ lưu trong trình duyệt này. Xem README.md để bật đồng bộ thật.</div>
+      <p style="margin-top:18px"><a href="index.html">← Về trang khách</a></p>
+    </div>
+  </section>
+
+  <!-- Màn hình quản lý -->
+  <section id="appView" class="hidden">
+    <div class="adminbar">
+      <div class="wrap">
+        <div class="in">
+          <div><b id="barName">Quản lý quán</b><div class="who" id="who"></div></div>
+          <div style="display:flex;gap:8px">
+            <a class="btn ghost sm" href="index.html" target="_blank" rel="noopener">Xem trang khách</a>
+            <button class="btn ghost sm" id="logoutBtn">Đăng xuất</button>
+          </div>
+        </div>
+        <div class="tabs" id="tabs">
+          <button class="tab on" data-tab="info">🏠 Thông tin</button>
+          <button class="tab" data-tab="menu">🧋 Thực đơn</button>
+          <button class="tab" data-tab="rev">📊 Doanh thu<span class="n hidden" id="newBadge">0</span></button>
+        </div>
+      </div>
+    </div>
+
+    <main class="wrap">
+      <!-- Thông tin quán -->
+      <div class="panel" id="panel-info">
+        <div class="card">
+          <div class="switch">
+            <div class="lbl"><b id="openLbl">Quán đang bán</b><small>Bật/tắt để khách thấy quán bán hay nghỉ</small></div>
+            <label class="tg"><input type="checkbox" data-f="isOpen" id="fOpen"><span></span></label>
+          </div>
+          <label class="f">Lời nhắn khi quán nghỉ</label>
+          <input data-f="closedNote" id="fClosedNote" placeholder="Quán nghỉ đến hết thứ Hai, hẹn gặp lại bạn!">
+        </div>
+        <div class="card">
+          <h3>Thông tin quán</h3>
+          <label class="f">Tên quán</label><input data-f="name" id="fName">
+          <label class="f">Giới thiệu ngắn (dưới tên quán)</label><input data-f="tagline" id="fTagline">
+          <label class="f">Thông báo nổi bật (để trống nếu không cần)</label><input data-f="notice" id="fNotice" placeholder="🎄 Khuyến mãi mùa lễ hội…">
+          <label class="f">Địa chỉ</label><input data-f="address" id="fAddress">
+          <label class="f">Số điện thoại / Zalo</label><input data-f="phone" id="fPhone" type="tel">
+          <label class="f">Giờ mở cửa</label><input data-f="hours" id="fHours">
+          <label class="f">Hướng dẫn thanh toán / chuyển khoản (hiện sau khi khách đặt món)</label>
+          <textarea data-f="payNote" id="fPayNote" placeholder="Ví dụ: Ngân hàng ABC · STK 0123456789 · NGUYEN VAN A"></textarea>
+        </div>
+      </div>
+
+      <!-- Thực đơn -->
+      <div class="panel hidden" id="panel-menu">
+        <div id="menuList"></div>
+        <button class="btn block" id="addItem">+ Thêm món mới</button>
+        <datalist id="catList"></datalist>
+      </div>
+
+      <!-- Doanh thu -->
+      <div class="panel hidden" id="panel-rev">
+        <div class="chips" id="rangeChips">
+          <button class="chip on" data-range="today">Hôm nay</button>
+          <button class="chip" data-range="7">7 ngày</button>
+          <button class="chip" data-range="30">30 ngày</button>
+          <button class="chip" data-range="all">Tất cả</button>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="card"><h3>Doanh thu 7 ngày gần nhất</h3><div class="bars" id="bars"></div></div>
+        <div class="card"><h3>Món bán chạy</h3><div id="top"></div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0 10px">
+          <h3 style="margin:0">Đơn hàng</h3>
+          <button class="btn sm" id="manualBtn">+ Ghi đơn tại quán</button>
+        </div>
+        <div class="chips" id="statusChips">
+          <button class="chip on" data-st="all">Tất cả</button>
+          <button class="chip" data-st="new">Chờ xử lý</button>
+          <button class="chip" data-st="done">Hoàn thành</button>
+          <button class="chip" data-st="cancelled">Đã huỷ</button>
+        </div>
+        <div id="orders"></div>
+      </div>
+    </main>
+
+    <div class="savebar" id="saveBar">
+      <div class="in">
+        <span class="st" id="saveSt">Đã đồng bộ</span>
+        <span style="display:flex;gap:8px">
+          <button class="btn ghost sm" id="revertBtn" disabled>Hoàn tác</button>
+          <button class="btn" id="saveBtn" disabled>💾 Lưu thay đổi</button>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <dialog id="manualDlg"><div class="dlg" id="manualBody"></div></dialog>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

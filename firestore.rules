@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Chỉ đúng tài khoản Google của chủ quán (đã xác minh email)
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email == 'duykhanh2605.pq@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    // Thông tin quán + thực đơn: ai cũng xem được, chỉ chủ quán được sửa
+    match /shop/{doc} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    // Đơn hàng: khách được tạo đơn mới (không đăng nhập), chỉ chủ quán đọc/sửa/xoá
+    match /orders/{id} {
+      allow create: if isOwner() || (
+        request.resource.data.status == 'new'
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        && request.resource.data.items.size() <= 50
+      );
+      allow read, update, delete: if isOwner();
+    }
+  }
+}
