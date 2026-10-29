@@ -9,7 +9,7 @@
   var useFirebase = !!(cfg && cfg.apiKey && window.firebase);
 
   var DEFAULT_SHOP = {
-    name: "Tiệm trà Duy Khánh",
+    name: "Tiệm trà của bạn",
     tagline: "Trà trái cây · Trà sữa · Sữa chua",
     notice: "",
     address: "Số nhà, đường, phường, quận/huyện, tỉnh/thành",
@@ -17,7 +17,6 @@
     hours: "08:00 – 21:00 mỗi ngày",
     isOpen: true,
     closedNote: "Quán đang nghỉ, hẹn gặp lại bạn sớm nhé!",
-    payNote: "",
     menu: [
       { id: "m1", name: "Trà đào cam sả", price: 35000, cat: "Trà trái cây", icon: "🍑", desc: "Trà đào thơm, cam tươi, sả", available: true },
       { id: "m2", name: "Trà vải hoa hồng", price: 35000, cat: "Trà trái cây", icon: "🌹", desc: "Vị vải ngọt nhẹ, thoang thoảng hoa hồng", available: true },

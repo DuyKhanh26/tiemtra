@@ -113,7 +113,7 @@
   }
 
   function renderAll() {
-    renderHeader(); renderMenu(); renderCartBar();
+    renderHeader(); renderMenu(); renderCartBar(); renderLastPay();
     if ($("#cartDlg").open && $("#cartBody").getAttribute("data-view") === "cart") renderCart();
   }
 
@@ -141,7 +141,7 @@
       '<div class="total"><span>Tổng cộng</span><span>' + money(t.total) + "</span></div>" +
       '<label class="f">Tên của bạn *</label><input id="cName" autocomplete="name" value="' + esc(checkoutInfo.name || "") + '" placeholder="Nguyễn Văn A">' +
       '<label class="f">Số điện thoại *</label><input id="cPhone" type="tel" autocomplete="tel" value="' + esc(checkoutInfo.phone || "") + '" placeholder="09xx xxx xxx">' +
-      '<label class="f">Hình thức nhận</label><select id="cMethod">' + opt(["Mang đi", "Uống tại quán", "Giao hàng (Đảm bảo bạn đã gọi và quán đã đồng ý)"], m) + "</select>" +
+      '<label class="f">Hình thức nhận</label><select id="cMethod">' + opt(["Mang đi", "Uống tại quán", "Giao hàng (Grab/Be…)"], m) + "</select>" +
       '<div id="addrBox" class="' + (m.indexOf("Giao") === 0 ? "" : "hidden") + '"><label class="f">Địa chỉ giao hàng *</label><input id="cAddr" autocomplete="street-address" value="' + esc(checkoutInfo.address || "") + '" placeholder="Số nhà, đường, phường…"></div>' +
       '<label class="f">Ghi chú</label><textarea id="cNote" placeholder="Ví dụ: ít ngọt, thêm trân châu…"></textarea>' +
       '<div style="height:14px"></div><button class="btn block" data-act="submit">Hoàn tất đặt món</button>';
@@ -166,6 +166,20 @@
         })
       }).catch(function () {});
     } catch (e) {}
+  }
+
+  /* ---------- Mã QR thanh toán ---------- */
+  function mountPay(code, total) {
+    var h = document.getElementById("payHost");
+    if (h && window.Pay) window.Pay.render(h, code, total);
+  }
+  function loadLast() {
+    try { var l = JSON.parse(localStorage.getItem("tra_last") || "null"); return l && Date.now() - l.at < 3 * 3600 * 1000 ? l : null; } catch (e) { return null; }
+  }
+  function renderLastPay() {
+    var b = $("#lastPay"), l = loadLast();
+    if (l && window.Pay && window.Pay.enabled()) { b.textContent = "💳 Xem lại mã thanh toán đơn #" + l.code; b.classList.remove("hidden"); }
+    else b.classList.add("hidden");
   }
 
   function submitOrder() {
@@ -196,8 +210,11 @@
       $("#cartBody").setAttribute("data-view", "done");
       $("#cartBody").innerHTML = '<button class="x" data-act="close">✕</button><div class="success"><div class="big">🎉</div><h2>Đặt món thành công!</h2>' +
         "<p>Mã đơn <b>" + esc(code) + "</b> · " + money(t.total) + "<br>Quán sẽ liên hệ bạn qua số <b>" + esc(phone) + "</b>.</p>" +
-        (shop.payNote ? '<div class="paybox">' + esc(shop.payNote) + "</div>" : "") +
+        '<div id="payHost"></div>' +
         '<button class="btn block" data-act="close">Đóng</button></div>';
+      mountPay(code, t.total);
+      try { localStorage.setItem("tra_last", JSON.stringify({ code: code, total: t.total, at: Date.now() })); } catch (e) {}
+      renderLastPay();
       renderMenu(); renderCartBar();
     }).catch(function (e) {
       console.error(e);
@@ -208,8 +225,14 @@
 
   /* ---------- Sự kiện ---------- */
   document.addEventListener("click", function (e) {
-    var el = e.target.closest("[data-act],[data-cat],#openCart");
+    var el = e.target.closest("[data-act],[data-cat],#openCart,#lastPay");
     if (!el) return;
+    if (el.id === "lastPay") {
+      var l = loadLast(); if (!l) return;
+      $("#cartBody").setAttribute("data-view", "pay");
+      $("#cartBody").innerHTML = '<button class="x" data-act="close">✕</button><h2>Thanh toán đơn #' + esc(l.code) + '</h2><div id="payHost"></div><button class="btn block" data-act="close">Đóng</button>';
+      mountPay(l.code, l.total); $("#cartDlg").showModal(); return;
+    }
     if (el.id === "openCart") { renderCart(); $("#cartDlg").showModal(); return; }
     if (el.hasAttribute("data-cat")) { activeCat = el.getAttribute("data-cat"); renderMenu(); return; }
     var act = el.getAttribute("data-act"), id = el.getAttribute("data-id");

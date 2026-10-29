@@ -163,18 +163,20 @@
   }
 
   /* ---------- Form thông tin ---------- */
-  var FIELDS = { name: "#fName", tagline: "#fTagline", notice: "#fNotice", address: "#fAddress", phone: "#fPhone", hours: "#fHours", payNote: "#fPayNote", closedNote: "#fClosedNote" };
+  var FIELDS = { name: "#fName", tagline: "#fTagline", notice: "#fNotice", address: "#fAddress", phone: "#fPhone", hours: "#fHours", closedNote: "#fClosedNote" };
   function renderInfo() {
     Object.keys(FIELDS).forEach(function (k) { $(FIELDS[k]).value = draft[k] || ""; });
     $("#fOpen").checked = draft.isOpen !== false;
     $("#openLbl").textContent = draft.isOpen !== false ? "Quán đang bán" : "Quán đang nghỉ";
   }
+
   $("#panel-info").addEventListener("input", function (e) {
     var f = e.target.getAttribute("data-f"); if (!f || !draft) return;
     draft[f] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
     if (f === "isOpen") $("#openLbl").textContent = draft.isOpen ? "Quán đang bán" : "Quán đang nghỉ";
     markDirty();
   });
+
 
   /* ---------- Thực đơn ---------- */
   function renderMenu(focusLast) {
