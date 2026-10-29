@@ -5,7 +5,7 @@ Web tĩnh (HTML/CSS/JS thuần), chạy được trên **GitHub Pages**. Dữ li
 - `index.html` — trang khách (không cần đăng nhập): xem thực đơn, chọn món, chọn đường/đá, đặt món.
 - `admin.html` — trang chủ quán (đăng nhập Google bằng `duykhanh2605.pq@gmail.com`):
   - Bật/tắt **Quán đang bán / Quán đang nghỉ**
-  - Sửa tên quán, địa chỉ, số điện thoại, giờ mở cửa, thông báo, hướng dẫn chuyển khoản
+  - Sửa tên quán, địa chỉ, số điện thoại, giờ mở cửa, thông báo
   - Thêm/sửa/xoá/sắp xếp món, đổi giá, đánh dấu *Còn bán / Tạm hết*
   - Xem **doanh thu** (hôm nay, 7 ngày, 30 ngày, tất cả), món bán chạy, danh sách đơn; xác nhận/huỷ đơn; ghi đơn bán tại quán
 
@@ -46,4 +46,5 @@ Mở `js/firebase-config.js`, bỏ dấu `//` ở khối `window.FIREBASE_CONFIG
 ## Ghi chú
 - Doanh thu chỉ tính các đơn ở trạng thái **Hoàn thành**.
 - Đơn khách đặt có trạng thái *Chờ xử lý*, hiện số đỏ trên tab “Doanh thu”. Trang quản lý cập nhật theo thời gian thực nên không cần tải lại.
-- Chưa có thanh toán online tự động; quán nhập hướng dẫn chuyển khoản/QR ở mục *Hướng dẫn thanh toán*, khách sẽ thấy sau khi đặt món.
+- **QR chuyển khoản (VietQR):** nhập ngân hàng, số tài khoản, tên chủ tài khoản vào `js/bank-config.js`. Sau khi khách đặt món, web tự tạo mã QR cho từng đơn, đã điền sẵn số tiền và nội dung = `DH ` + mã đơn (ví dụ `DH A3F9`). Khách quét là xong.
+- Web **không tự biết** khách đã chuyển tiền chưa. Bạn đối chiếu nội dung chuyển khoản trong app ngân hàng với mã đơn `#A3F9` ở trang quản lý, rồi bấm *Hoàn thành* để tính doanh thu.
