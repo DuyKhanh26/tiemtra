@@ -60,9 +60,12 @@
       <!-- Đặt món tại quầy -->
       <div class="panel hidden" id="panel-new">
         <div class="card">
+          <input id="nSearch" type="search" placeholder="🔍 Tìm món…" autocomplete="off">
+          <div class="cats" id="nCats"></div>
           <div id="newMenu"></div>
         </div>
         <div class="card">
+          <div id="nPicked" style="margin-bottom:8px"></div>
           <label class="f" style="margin-top:0">Tên khách (không bắt buộc)</label><input id="nName" placeholder="Khách tại quán">
           <label class="f">Hình thức</label>
           <select id="nMethod"><option>Uống tại quán</option><option>Mang đi</option></select>
