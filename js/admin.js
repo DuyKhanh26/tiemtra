@@ -15,7 +15,7 @@
   var OWNER = Store.OWNER;
   var draft = null, saved = null, dirty = false;
   var orders = [], range = "today", stFilter = "all", tab = "info";
-  var unsubShop = null, unsubOrders = null, loginMsg = "";
+  var meEmail = "", unsubShop = null, unsubOrders = null, unsubStaff = null, staffList = [], loginMsg = "";
 
   /* ---------- Đăng nhập ---------- */
   function showLogin() {
@@ -28,6 +28,7 @@
   function stopListening() {
     if (unsubShop) { unsubShop(); unsubShop = null; }
     if (unsubOrders) { unsubOrders(); unsubOrders = null; }
+    if (unsubStaff) { unsubStaff(); unsubStaff = null; }
     draft = saved = null; dirty = false; orders = []; seen = null;
   }
 
@@ -78,7 +79,7 @@
 
   function detectNew(list) {
     if (seen === null) { seen = {}; list.forEach(function (o) { seen[o.id] = 1; }); return; }
-    var fresh = list.filter(function (o) { return !seen[o.id] && o.status === "new"; });
+    var fresh = list.filter(function (o) { return !seen[o.id] && o.status === "new" && o.source !== "staff"; });
     list.forEach(function (o) { seen[o.id] = 1; });
     if (!fresh.length) return;
     beep();
@@ -97,7 +98,7 @@
   function showApp(user) {
     $("#loginView").classList.add("hidden");
     $("#appView").classList.remove("hidden");
-    $("#who").textContent = user.email;
+    $("#who").textContent = user.email; meEmail = user.email;
     if (!unsubShop) {
       unsubShop = Store.subscribeShop(function (s) {
         saved = clone(s);
@@ -106,7 +107,10 @@
       });
     }
     if (!unsubOrders) {
-      unsubOrders = Store.subscribeOrders(function (list) { detectNew(list); orders = list; renderRevenue(); });
+      unsubOrders = Store.subscribeOrders(function (list) { detectNew(list); orders = list; renderRevenue(); renderTables(); });
+    }
+    if (!unsubStaff) {
+      unsubStaff = Store.subscribeStaff(function (list) { staffList = list; renderStaff(); renderRevenue(); renderTables(); });
     }
   }
 
@@ -141,7 +145,8 @@
     var b = e.target.closest("[data-tab]"); if (!b) return;
     tab = b.getAttribute("data-tab");
     $$(".tab").forEach(function (t) { t.classList.toggle("on", t === b); });
-    ["info", "menu", "rev"].forEach(function (k) { $("#panel-" + k).classList.toggle("hidden", k !== tab); });
+    ["info", "menu", "rev", "tables", "staff"].forEach(function (k) { $("#panel-" + k).classList.toggle("hidden", k !== tab); });
+    $("#saveBar").classList.toggle("hidden", tab === "staff" || tab === "tables");
   });
 
   /* ---------- Trạng thái lưu ---------- */
@@ -178,47 +183,161 @@
   });
 
 
-  /* ---------- Thực đơn ---------- */
-  function renderMenu(focusLast) {
-    var menu = draft.menu;
-    var cats = [];
-    menu.forEach(function (m) { var c = (m.cat || "").trim(); if (c && cats.indexOf(c) < 0) cats.push(c); });
-    $("#catList").innerHTML = cats.map(function (c) { return '<option value="' + esc(c) + '">'; }).join("");
-    if (!menu.length) { $("#menuList").innerHTML = '<div class="empty" style="text-align:center;color:var(--muted);padding:24px">Chưa có món nào. Bấm “Thêm món mới” nhé.</div>'; return; }
-    $("#menuList").innerHTML = menu.map(function (m, i) {
-      return '<div class="mrow' + (m.available === false ? " off" : "") + '" data-i="' + i + '"><div class="grid2">' +
-        '<div class="full"><label class="f" style="margin-top:0">Tên món</label><input data-k="name" value="' + esc(m.name) + '"></div>' +
-        '<div><label class="f">Giá (đ)</label><input data-k="price" type="number" min="0" step="1000" inputmode="numeric" value="' + esc(m.price) + '"></div>' +
-        '<div><label class="f">Nhóm món</label><input data-k="cat" list="catList" value="' + esc(m.cat || "") + '" placeholder="Trà trái cây…"></div>' +
-        '<div class="full"><label class="f">Mô tả</label><input data-k="desc" value="' + esc(m.desc || "") + '"></div>' +
-        '<div class="full"><label class="f">Biểu tượng (emoji) hoặc link ảnh https://…</label><input data-k="icon" value="' + esc(m.icon || "") + '"></div>' +
-        '</div><div class="acts"><label class="chk"><input type="checkbox" data-k="available"' + (m.available !== false ? " checked" : "") + '> Còn bán</label>' +
-        '<span style="display:flex;gap:6px"><button class="btn ghost sm" data-act="up" title="Lên">↑</button><button class="btn ghost sm" data-act="down" title="Xuống">↓</button>' +
-        '<button class="btn danger sm" data-act="del">Xoá</button></span></div></div>';
-    }).join("");
-    if (focusLast) { var ins = $$("#menuList .mrow"); var last = ins[ins.length - 1]; last.scrollIntoView({ block: "center" }); last.querySelector("input").select(); }
+  /* ---------- Bàn đang mở ---------- */
+  var billUI = null;
+  function renderTables() {
+    var gs = Tables.group(orders);
+    $("#tablesAdmin").innerHTML = Tables.cardsHtml(gs) + Tables.paidHtml(Tables.paidGroups(orders, startOfDay(Date.now())), staffName);
+    var tb = $("#tblBadge"); tb.textContent = gs.length; tb.classList.toggle("hidden", gs.length === 0);
   }
+  $("#tablesAdmin").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-bill-open]"); if (!b) return;
+    var g = Tables.group(orders).filter(function (x) { return x.table === b.getAttribute("data-bill-open"); })[0];
+    if (!g) return;
+    if (!billUI) billUI = Tables.createBillUI({ dlg: $("#billDlg"), body: $("#billBody"), email: function () { return meEmail; }, toast: toast });
+    billUI.open(g);
+  });
+
+  /* ---------- Nhân viên ---------- */
+  function staffName(email) {
+    var e = String(email || "").toLowerCase();
+    for (var i = 0; i < staffList.length; i++) if (staffList[i].email === e && staffList[i].name) return staffList[i].name;
+    return e;   // chưa đặt tên thì hiện Gmail đầy đủ
+  }
+  function renderStaff() {
+    var l = staffList.slice().sort(function (a, b) { return (a.addedAt || 0) - (b.addedAt || 0); });
+    $("#stList").innerHTML = l.length ? l.map(function (x) {
+      return '<div class="stepper-row"><span><b>' + esc(x.name || x.email.split("@")[0]) + '</b><br><small style="color:var(--muted)">' + esc(x.email) + '</small></span>' +
+        '<button class="btn danger sm" data-rm="' + esc(x.email) + '">Xoá</button></div>';
+    }).join("") : '<div style="color:var(--muted);padding:8px 0">Chưa có nhân viên nào.</div>';
+  }
+  $("#stLink").value = new URL("staff.html", location.href).href;
+  $("#stCopy").addEventListener("click", function () {
+    var v = $("#stLink").value;
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(function () { toast("Đã sao chép link ✓"); });
+    else { $("#stLink").select(); try { document.execCommand("copy"); toast("Đã sao chép link ✓"); } catch (e) {} }
+  });
+  $("#stAdd").addEventListener("click", function () {
+    var email = $("#stEmail").value.trim().toLowerCase(), name = $("#stName").value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert("Gmail chưa đúng định dạng."); $("#stEmail").focus(); return; }
+    if (email === OWNER) { alert("Đây là email chủ quán, không cần thêm."); return; }
+    Store.addStaff(email, name).then(function () {
+      $("#stEmail").value = ""; $("#stName").value = ""; toast("Đã thêm nhân viên ✓");
+    }).catch(function (e) { alert("Chưa thêm được: " + (e && e.message ? e.message : e)); });
+  });
+  $("#stList").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-rm]"); if (!b) return;
+    var em = b.getAttribute("data-rm");
+    if (!confirm("Xoá nhân viên " + em + "? Người này sẽ không đăng nhập được nữa.")) return;
+    Store.removeStaff(em).then(function () { toast("Đã xoá nhân viên"); })
+      .catch(function (err) { alert("Chưa xoá được: " + (err && err.message ? err.message : err)); });
+  });
+
+  /* ---------- Thực đơn: lọc theo nhóm, tìm kiếm, thu gọn từng món ---------- */
+  var menuCat = "__all", menuQ = "", openRows = {};
+  function fold(s) { return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").toLowerCase(); }
+  function catOf(m) { return (m.cat || "").trim(); }
+  function iconTxt(ic) { ic = String(ic || "🧋"); return /^https?:/i.test(ic) ? "🖼️" : ic; }
+  function matches(m) {
+    var c = catOf(m);
+    if (menuCat === "__none") { if (c) return false; }
+    else if (menuCat !== "__all" && c !== menuCat) return false;
+    if (menuQ && fold(m.name + " " + (m.desc || "")).indexOf(fold(menuQ)) < 0) return false;
+    return true;
+  }
+  function rowHtml(m, i) {
+    return '<div class="mrow' + (m.available === false ? " off" : "") + (openRows[m.id] ? " open" : "") + '" data-i="' + i + '" data-id="' + esc(m.id) + '">' +
+      '<div class="mh"><span class="mico">' + esc(iconTxt(m.icon)) + '</span>' +
+      '<span class="mt"><b class="mh-name">' + esc(m.name || "(chưa đặt tên)") + '</b><small><span class="mh-price">' + money(m.price) + '</span> · <span class="mh-cat">' + esc(catOf(m) || "Chưa phân nhóm") + "</span></small></span>" +
+      '<label class="tg sm" title="Còn bán / Tạm hết"><input type="checkbox" data-k="available"' + (m.available !== false ? " checked" : "") + "><span></span></label>" +
+      '<span class="chev">▾</span></div>' +
+      '<div class="mb"><div class="grid2">' +
+      '<div class="full"><label class="f" style="margin-top:0">Tên món</label><input data-k="name" value="' + esc(m.name) + '"></div>' +
+      '<div><label class="f">Giá (đ)</label><input data-k="price" type="number" min="0" step="1000" inputmode="numeric" value="' + esc(m.price) + '"></div>' +
+      '<div><label class="f">Nhóm món</label><input data-k="cat" list="catList" value="' + esc(m.cat || "") + '" placeholder="Trà trái cây…"></div>' +
+      '<div class="full"><label class="f">Mô tả</label><input data-k="desc" value="' + esc(m.desc || "") + '"></div>' +
+      '<div class="full"><label class="f">Biểu tượng (emoji) hoặc link ảnh https://…</label><input data-k="icon" value="' + esc(m.icon || "") + '"></div>' +
+      '</div><div class="acts"><span style="color:var(--muted);font-size:12.5px">Bật/tắt “còn bán” ở công tắc phía trên</span>' +
+      '<span style="display:flex;gap:6px"><button class="btn ghost sm" data-act="up" title="Lên">↑</button><button class="btn ghost sm" data-act="down" title="Xuống">↓</button>' +
+      '<button class="btn danger sm" data-act="del">Xoá</button></span></div></div></div>';
+  }
+  function renderMenu(focusId) {
+    var menu = draft.menu, cats = [], counts = {}, none = 0;
+    menu.forEach(function (m) { var c = catOf(m); if (!c) none++; else { if (cats.indexOf(c) < 0) cats.push(c); counts[c] = (counts[c] || 0) + 1; } });
+    if (menuCat !== "__all" && menuCat !== "__none" && cats.indexOf(menuCat) < 0) menuCat = "__all";
+    if (menuCat === "__none" && !none) menuCat = "__all";
+    $("#catList").innerHTML = cats.map(function (c) { return '<option value="' + esc(c) + '">'; }).join("");
+    var chips = [{ k: "__all", t: "Tất cả (" + menu.length + ")" }];
+    cats.forEach(function (c) { chips.push({ k: c, t: c + " (" + counts[c] + ")" }); });
+    if (none && cats.length) chips.push({ k: "__none", t: "Chưa phân nhóm (" + none + ")" });
+    $("#menuCats").innerHTML = chips.length > 1 ? chips.map(function (c) {
+      return '<button class="cat' + (c.k === menuCat ? " on" : "") + '" data-mcat="' + esc(c.k) + '">' + esc(c.t) + "</button>";
+    }).join("") : "";
+    var vis = []; menu.forEach(function (m, i) { if (matches(m)) vis.push(i); });
+    $("#menuInfo").textContent = menu.length ? "Hiển thị " + vis.length + "/" + menu.length + " món" : "";
+    $("#catRename").classList.toggle("hidden", menuCat === "__all" || menuCat === "__none");
+    if (!menu.length) { $("#menuList").innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Chưa có món nào. Bấm “Thêm món mới” nhé.</div>'; return; }
+    if (!vis.length) { $("#menuList").innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Không có món nào khớp.</div>'; return; }
+    $("#menuList").innerHTML = vis.map(function (i) { return rowHtml(menu[i], i); }).join("");
+    if (focusId) {
+      var el = document.querySelector('#menuList .mrow[data-id="' + focusId + '"]');
+      if (el) { el.scrollIntoView({ block: "center" }); var inp = el.querySelector(".mb input"); if (inp) inp.select(); }
+    }
+  }
+  $("#menuSearch").addEventListener("input", function () { menuQ = this.value.trim(); if (draft) renderMenu(); });
+  $("#menuCats").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-mcat]"); if (!b) return;
+    menuCat = b.getAttribute("data-mcat"); renderMenu();
+  });
+  $("#catRename").addEventListener("click", function () {
+    var old = menuCat; if (old === "__all" || old === "__none") return;
+    var nn = prompt("Tên mới cho nhóm “" + old + "”:", old);
+    if (nn === null) return; nn = nn.trim();
+    if (!nn || nn === old) return;
+    draft.menu.forEach(function (m) { if (catOf(m) === old) m.cat = nn; });
+    menuCat = nn; markDirty(); renderMenu();
+  });
   $("#menuList").addEventListener("input", function (e) {
     var k = e.target.getAttribute("data-k"); if (!k) return;
-    var i = +e.target.closest(".mrow").getAttribute("data-i");
+    var row = e.target.closest(".mrow"), i = +row.getAttribute("data-i");
     var m = draft.menu[i]; if (!m) return;
-    if (k === "available") { m.available = e.target.checked; e.target.closest(".mrow").classList.toggle("off", !m.available); }
-    else if (k === "price") m.price = e.target.value === "" ? 0 : Math.max(0, Number(e.target.value));
-    else m[k] = e.target.value;
+    if (k === "available") { m.available = e.target.checked; row.classList.toggle("off", !m.available); }
+    else if (k === "price") { m.price = e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)); row.querySelector(".mh-price").textContent = money(m.price); }
+    else {
+      m[k] = e.target.value;
+      if (k === "name") row.querySelector(".mh-name").textContent = m.name || "(chưa đặt tên)";
+      else if (k === "cat") row.querySelector(".mh-cat").textContent = catOf(m) || "Chưa phân nhóm";
+      else if (k === "icon") row.querySelector(".mico").textContent = iconTxt(m.icon);
+    }
     markDirty();
   });
+  $("#menuList").addEventListener("change", function (e) {
+    if (e.target.getAttribute && e.target.getAttribute("data-k") === "cat") renderMenu();   // cập nhật chip nhóm khi gõ xong
+  });
   $("#menuList").addEventListener("click", function (e) {
-    var b = e.target.closest("[data-act]"); if (!b) return;
-    var i = +b.closest(".mrow").getAttribute("data-i"), act = b.getAttribute("data-act"), m = draft.menu;
+    var row = e.target.closest(".mrow"); if (!row) return;
+    var i = +row.getAttribute("data-i"), m = draft.menu, b = e.target.closest("[data-act]");
+    if (!b) {
+      if (e.target.closest(".mh") && !e.target.closest(".tg")) {
+        var id = row.getAttribute("data-id"); openRows[id] = !openRows[id]; row.classList.toggle("open", !!openRows[id]);
+      }
+      return;
+    }
+    var act = b.getAttribute("data-act");
     if (act === "del") { if (!confirm("Xoá món “" + (m[i].name || "") + "”?")) return; m.splice(i, 1); }
-    else if (act === "up" && i > 0) { var t = m[i]; m[i] = m[i - 1]; m[i - 1] = t; }
-    else if (act === "down" && i < m.length - 1) { var t2 = m[i]; m[i] = m[i + 1]; m[i + 1] = t2; }
-    else return;
+    else if (act === "up" || act === "down") {
+      var vis = []; m.forEach(function (x, j) { if (matches(x)) vis.push(j); });
+      var pos = vis.indexOf(i), tj = act === "up" ? vis[pos - 1] : vis[pos + 1];
+      if (tj === undefined) return;
+      var t = m[i]; m[i] = m[tj]; m[tj] = t;
+    } else return;
     markDirty(); renderMenu();
   });
   $("#addItem").addEventListener("click", function () {
-    draft.menu.push({ id: uid(), name: "Món mới", price: 35000, cat: "", icon: "🧋", desc: "", available: true });
-    markDirty(); renderMenu(true);
+    var c = (menuCat !== "__all" && menuCat !== "__none") ? menuCat : "";
+    var m = { id: uid(), name: "Món mới", price: 35000, cat: c, icon: "🧋", desc: "", available: true };
+    draft.menu.push(m); openRows[m.id] = true; menuQ = ""; $("#menuSearch").value = "";
+    markDirty(); renderMenu(m.id);
   });
 
   function renderAllForms() { renderInfo(); renderMenu(); updateSaveBar(); renderRevenue(); }
@@ -251,6 +370,12 @@
   });
 
   /* ---------- Doanh thu ---------- */
+  /* Đơn được tính doanh thu: đơn thường khi đã xong; đơn uống tại bàn khi đã tính tiền */
+  function counted(o) {
+    if (o.status === "cancelled") return false;
+    if (o.table) return o.billStatus === "paid" && !!o.paidBy;
+    return o.status === "done";
+  }
   function orderTotal(o) {
     return (o.items || []).reduce(function (s, it) { return s + (Number(it.price) || 0) * (Number(it.qty) || 0); }, 0);
   }
@@ -272,7 +397,7 @@
     if (!$("#stats")) return;
     var from = rangeStart();
     var inRange = orders.filter(function (o) { return (o.createdAt || 0) >= from; });
-    var done = inRange.filter(function (o) { return o.status === "done"; });
+    var done = inRange.filter(counted);
     var revenue = done.reduce(function (s, o) { return s + orderTotal(o); }, 0);
     var cups = done.reduce(function (s, o) { return s + (o.items || []).reduce(function (a, i) { return a + (Number(i.qty) || 0); }, 0); }, 0);
     var pending = orders.filter(function (o) { return o.status === "new"; }).length;
@@ -289,7 +414,7 @@
     var days = [], today = startOfDay(Date.now());
     for (var i = 6; i >= 0; i--) { var t = today - i * 86400000; days.push({ t: t, v: 0 }); }
     orders.forEach(function (o) {
-      if (o.status !== "done") return;
+      if (!counted(o)) return;
       var k = dayKey(o.createdAt);
       days.forEach(function (d) { if (dayKey(d.t) === k) d.v += orderTotal(o); });
     });
@@ -317,6 +442,7 @@
   }
 
   var ST = { new: "Chờ xử lý", done: "Hoàn thành", cancelled: "Đã huỷ" };
+  var SRC = { web: "Web", shop: "Tại quán", staff: "Nhân viên" };
   function orderHtml(o) {
     var c = o.customer || {};
     var acts = "";
@@ -324,12 +450,14 @@
     else acts = '<button class="btn ghost sm" data-act="new">Mở lại</button>';
     acts += '<button class="btn danger sm" data-act="del">🗑</button>';
     return '<div class="order ' + esc(o.status) + '" data-id="' + esc(o.id) + '">' +
-      '<div class="h"><span>#' + esc(o.code || "") + ' <span class="tagx ' + esc(o.status) + '">' + esc(ST[o.status] || o.status) + '</span><span class="tagx">' + (o.source === "web" ? "Web" : "Tại quán") + "</span></span><span>" + money(orderTotal(o)) + "</span></div>" +
+      '<div class="h"><span>#' + esc(o.code || "") + ' <span class="tagx ' + esc(o.status) + '">' + esc(ST[o.status] || o.status) + '</span><span class="tagx">' + (SRC[o.source] || "Tại quán") + "</span>" + (o.table ? '<span class="tagx tb">Bàn ' + esc(o.table) + "</span>" : "") + "</span><span>" + money(orderTotal(o)) + "</span></div>" +
       '<div class="sub">' + fmtTime(o.createdAt) + " · " + esc(c.name || "") + (c.phone ? ' · <a href="tel:' + esc(String(c.phone).replace(/\D/g, "")) + '">' + esc(c.phone) + "</a>" : "") + "</div>" +
       (o.method ? '<div class="sub">' + esc(o.method) + (o.address ? " · " + esc(o.address) : "") + "</div>" : "") +
       "<ul>" + (o.items || []).map(function (it) {
         return "<li>" + esc(it.name) + " × " + esc(it.qty) + (it.sugar ? ' <span class="sub">(' + esc(it.sugar) + " đường, " + esc(it.ice) + ")</span>" : "") + "</li>";
       }).join("") + "</ul>" +
+      (o.table ? '<div class="sub">' + (o.billStatus === "paid" ? "💰 Đã tính tiền (" + (o.payMethod === "cash" ? "tiền mặt" : "chuyển khoản") + ") · " + esc(staffName(o.paidBy)) : "⏳ Bàn chưa tính tiền") + "</div>" : "") +
+      (o.createdBy || o.doneBy ? '<div class="sub">' + (o.createdBy ? "Nhập bởi " + esc(staffName(o.createdBy)) : "") + (o.createdBy && o.doneBy ? " · " : "") + (o.doneBy ? "Xong bởi " + esc(staffName(o.doneBy)) : "") + "</div>" : "") +
       (o.note ? '<div class="sub">📝 ' + esc(o.note) + "</div>" : "") +
       '<div class="acts">' + acts + "</div></div>";
   }

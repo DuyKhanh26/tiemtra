@@ -53,6 +53,26 @@
         return db.doc("shop/main").set(data);
       },
       addOrder: function (o) { return db.collection("orders").add(o); },
+      subscribeOrdersSince: function (since, cb) {
+        return db.collection("orders").where("createdAt", ">=", since).orderBy("createdAt", "desc").limit(500).onSnapshot(
+          function (sn) { cb(sn.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; })); },
+          function (e) { console.error(e); }
+        );
+      },
+      subscribeStaff: function (cb) {
+        return db.collection("staff").onSnapshot(
+          function (sn) { cb(sn.docs.map(function (d) { var x = d.data(); x.email = (x.email || d.id).toLowerCase(); return x; })); },
+          function (e) { console.error(e); }
+        );
+      },
+      addStaff: function (email, name) {
+        email = String(email).trim().toLowerCase();
+        return db.doc("staff/" + email).set({ email: email, name: name || "", addedAt: Date.now() });
+      },
+      removeStaff: function (email) { return db.doc("staff/" + String(email).trim().toLowerCase()).delete(); },
+      isStaff: function (email) {
+        return db.doc("staff/" + String(email).trim().toLowerCase()).get().then(function (s) { return s.exists; });
+      },
       subscribeOrders: function (cb) {
         return db.collection("orders").orderBy("createdAt", "desc").limit(2000).onSnapshot(
           function (sn) { cb(sn.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; })); },
@@ -60,6 +80,14 @@
         );
       },
       updateOrder: function (id, patch) { return db.collection("orders").doc(id).update(patch); },
+      updateOrders: function (ids, patch) {
+        var chunks = []; for (var i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10));
+        return chunks.reduce(function (p, ch) {
+          return p.then(function () {
+            var b = db.batch(); ch.forEach(function (id) { b.update(db.collection("orders").doc(id), patch); }); return b.commit();
+          });
+        }, Promise.resolve());
+      },
       deleteOrder: function (id) { return db.collection("orders").doc(id).delete(); },
       onAuth: function (cb) {
         return auth.onAuthStateChanged(function (u) {
@@ -94,8 +122,30 @@
         x.id = "o" + Date.now() + Math.random().toString(36).slice(2, 6);
         list.unshift(x); write("tra_orders", list); return Promise.resolve();
       },
+      subscribeOrdersSince: function (since, cb) {
+        return sub("tra_orders", function () { return read("tra_orders", []).filter(function (o) { return (o.createdAt || 0) >= since; }).sort(function (a, b) { return b.createdAt - a.createdAt; }); }, cb);
+      },
+      subscribeStaff: function (cb) { return sub("tra_staff", function () { return read("tra_staff", []); }, cb); },
+      addStaff: function (email, name) {
+        email = String(email).trim().toLowerCase();
+        var l = read("tra_staff", []).filter(function (x) { return x.email !== email; });
+        l.push({ email: email, name: name || "", addedAt: Date.now() }); write("tra_staff", l); return Promise.resolve();
+      },
+      removeStaff: function (email) {
+        email = String(email).trim().toLowerCase();
+        write("tra_staff", read("tra_staff", []).filter(function (x) { return x.email !== email; })); return Promise.resolve();
+      },
+      isStaff: function (email) {
+        email = String(email).trim().toLowerCase();
+        return Promise.resolve(read("tra_staff", []).some(function (x) { return x.email === email; }));
+      },
       subscribeOrders: function (cb) {
         return sub("tra_orders", function () { return read("tra_orders", []).sort(function (a, b) { return b.createdAt - a.createdAt; }); }, cb);
+      },
+      updateOrders: function (ids, patch) {
+        var list = read("tra_orders", []);
+        list.forEach(function (o) { if (ids.indexOf(o.id) >= 0) Object.assign(o, patch); });
+        write("tra_orders", list); return Promise.resolve();
       },
       updateOrder: function (id, patch) {
         var list = read("tra_orders", []);

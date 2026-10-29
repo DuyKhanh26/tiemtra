@@ -17,6 +17,8 @@
   var cart = loadCart();      // { itemId: {qty, sugar, ice} }
   var activeCat = "Tất cả";
   var checkoutInfo = loadInfo();
+  var urlTable = "";
+  try { urlTable = window.Tables ? Tables.norm(new URLSearchParams(location.search).get("ban")) : ""; } catch (e) {}
 
   function loadCart() { try { return JSON.parse(localStorage.getItem("tra_cart") || "{}"); } catch (e) { return {}; } }
   function saveCart() { try { localStorage.setItem("tra_cart", JSON.stringify(cart)); } catch (e) {} }
@@ -130,7 +132,7 @@
       body.innerHTML = '<button class="x" data-act="close">✕</button><h2>Đơn của bạn</h2><div class="empty">Chưa chọn món nào 🧋</div>';
       return;
     }
-    var m = checkoutInfo.method || "Mang đi";
+    var m = urlTable ? "Uống tại quán" : (checkoutInfo.method || "Mang đi");
     body.innerHTML =
       '<button class="x" data-act="close">✕</button><h2>Đơn của bạn</h2>' +
       lines.map(function (l) {
@@ -142,6 +144,7 @@
       '<label class="f">Tên của bạn *</label><input id="cName" autocomplete="name" value="' + esc(checkoutInfo.name || "") + '" placeholder="Nguyễn Văn A">' +
       '<label class="f">Số điện thoại *</label><input id="cPhone" type="tel" autocomplete="tel" value="' + esc(checkoutInfo.phone || "") + '" placeholder="09xx xxx xxx">' +
       '<label class="f">Hình thức nhận</label><select id="cMethod">' + opt(["Mang đi", "Uống tại quán", "Giao hàng (Grab/Be…)"], m) + "</select>" +
+      '<div id="tableBox" class="' + (m === "Uống tại quán" ? "" : "hidden") + '"><label class="f">Số bàn (không bắt buộc)</label><input id="cTable" maxlength="10" autocomplete="off" value="' + esc(urlTable || (checkoutInfo.tableAt && Date.now() - checkoutInfo.tableAt < 10 * 60 * 1000 ? checkoutInfo.table : "") || "") + '" placeholder="Bàn bạn đang ngồi, ví dụ: 5"><div class="hintsm">Điền số bàn để gọi thêm món sau này: quán gộp thành một hoá đơn, thanh toán một lần khi bạn xong. Để trống nếu bạn muốn thanh toán riêng đơn này ngay.</div></div>' +
       '<div id="addrBox" class="' + (m.indexOf("Giao") === 0 ? "" : "hidden") + '"><label class="f">Địa chỉ giao hàng *</label><input id="cAddr" autocomplete="street-address" value="' + esc(checkoutInfo.address || "") + '" placeholder="Số nhà, đường, phường…"></div>' +
       '<label class="f">Ghi chú</label><textarea id="cNote" placeholder="Ví dụ: ít ngọt, thêm trân châu…"></textarea>' +
       '<div style="height:14px"></div><button class="btn block" data-act="submit">Hoàn tất đặt món</button>';
@@ -159,7 +162,7 @@
         body: JSON.stringify({
           topic: topic,
           title: "🔔 Đơn mới #" + order.code + " – " + money(order.total),
-          message: text + " (" + order.method + ")",
+          message: text + " (" + order.method + (order.table ? " · Bàn " + order.table : "") + ")",
           priority: 5,
           tags: ["bell"],
           click: new URL("admin.html", location.href).href
@@ -174,7 +177,7 @@
     if (h && window.Pay) window.Pay.render(h, code, total);
   }
   function loadLast() {
-    try { var l = JSON.parse(localStorage.getItem("tra_last") || "null"); return l && Date.now() - l.at < 3 * 3600 * 1000 ? l : null; } catch (e) { return null; }
+    try { var l = JSON.parse(localStorage.getItem("tra_last") || "null"); return l && Date.now() - l.at < 10 * 60 * 1000 ? l : null; } catch (e) { return null; }
   }
   function renderLastPay() {
     var b = $("#lastPay"), l = loadLast();
@@ -188,6 +191,8 @@
     var method = $("#cMethod").value;
     var addr = $("#cAddr") ? $("#cAddr").value.trim() : "";
     var note = $("#cNote").value.trim();
+    var dine = method === "Uống tại quán";
+    var tbl = dine && $("#cTable") ? Tables.norm($("#cTable").value) : "";
     if (!isOpen()) { alert("Quán đang nghỉ, bạn quay lại sau nhé!"); return; }
     if (!name) { alert("Bạn vui lòng nhập tên."); $("#cName").focus(); return; }
     if (digits(phone).length < 9) { alert("Số điện thoại chưa đúng."); $("#cPhone").focus(); return; }
@@ -202,19 +207,26 @@
       note: note, total: t.total,
       items: lines.map(function (l) { return { id: l.id, name: l.name, price: l.price, qty: l.qty, sugar: l.sugar, ice: l.ice }; })
     };
-    checkoutInfo = { name: name, phone: phone, method: method, address: addr }; saveInfo();
+    if (dine && tbl) { order.table = tbl; order.billStatus = "open"; }
+    checkoutInfo = { name: name, phone: phone, method: method, address: addr, table: tbl, tableAt: tbl ? Date.now() : 0 }; saveInfo();
     var btn = document.querySelector('[data-act="submit"]'); btn.disabled = true; btn.textContent = "Đang gửi…";
     Store.addOrder(order).then(function () {
       pushNotify(order);
       cart = {}; saveCart();
       $("#cartBody").setAttribute("data-view", "done");
-      $("#cartBody").innerHTML = '<button class="x" data-act="close">✕</button><div class="success"><div class="big">🎉</div><h2>Đặt món thành công!</h2>' +
-        "<p>Mã đơn <b>" + esc(code) + "</b> · " + money(t.total) + "<br>Quán sẽ liên hệ bạn qua số <b>" + esc(phone) + "</b>.</p>" +
-        '<div id="payHost"></div>' +
-        '<button class="btn block" data-act="close">Đóng</button></div>';
-      mountPay(code, t.total);
-      try { localStorage.setItem("tra_last", JSON.stringify({ code: code, total: t.total, at: Date.now() })); } catch (e) {}
-      renderLastPay();
+      if (dine && tbl) {
+        $("#cartBody").innerHTML = '<button class="x" data-act="close">✕</button><div class="success"><div class="big">🎉</div><h2>Đã ghi vào ' + esc(Tables.label(tbl)) + "</h2>" +
+          "<p>Mã đơn <b>" + esc(code) + "</b> · " + money(t.total) + "<br>Bạn cứ dùng xong rồi thanh toán, nhân viên sẽ tính tiền theo số bàn.<br>Muốn gọi thêm, cứ đặt tiếp và nhập lại đúng <b>" + esc(Tables.label(tbl)) + "</b> nhé.</p>" +
+          '<button class="btn block" data-act="close">Đóng</button></div>';
+      } else {
+        $("#cartBody").innerHTML = '<button class="x" data-act="close">✕</button><div class="success"><div class="big">🎉</div><h2>Đặt món thành công!</h2>' +
+          "<p>Mã đơn <b>" + esc(code) + "</b> · " + money(t.total) + "<br>Quán sẽ liên hệ bạn qua số <b>" + esc(phone) + "</b>.</p>" +
+          '<div id="payHost"></div>' +
+          '<button class="btn block" data-act="close">Đóng</button></div>';
+        mountPay(code, t.total);
+        try { localStorage.setItem("tra_last", JSON.stringify({ code: code, total: t.total, at: Date.now() })); } catch (e) {}
+        renderLastPay();
+      }
       renderMenu(); renderCartBar();
     }).catch(function (e) {
       console.error(e);
@@ -252,6 +264,7 @@
     var t = e.target;
     if (t.id === "cMethod") {
       $("#addrBox").classList.toggle("hidden", t.value.indexOf("Giao") !== 0);
+      $("#tableBox").classList.toggle("hidden", t.value !== "Uống tại quán");
     } else if (t.matches && t.matches('.line select')) {
       var id = t.closest(".line").getAttribute("data-id");
       if (cart[id]) { cart[id][t.getAttribute("data-f")] = t.value; saveCart(); }
