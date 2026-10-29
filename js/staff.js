@@ -178,21 +178,55 @@
       return { id: m.id, name: m.name, price: Number(m.price) || 0, qty: cart[m.id] };
     });
   }
+  var nCat = "__all", nQ = "";
+  function fold(t) { return String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").toLowerCase(); }
   function renderNew() {
-    var items = availItems(), html = "", lastCat = null;
+    var items = availItems(), cats = [], none = 0, selBy = {}, totalQty = 0;
     items.forEach(function (m) {
+      var c = (m.cat || "").trim(), q = cart[m.id] || 0;
+      if (!c) none++; else if (cats.indexOf(c) < 0) cats.push(c);
+      selBy[c || "__none"] = (selBy[c || "__none"] || 0) + q; totalQty += q;
+    });
+    if (nCat !== "__all" && nCat !== "__none" && cats.indexOf(nCat) < 0) nCat = "__all";
+    if (nCat === "__none" && !none) nCat = "__all";
+    var chips = [{ k: "__all", t: "Tất cả", n: totalQty }];
+    cats.forEach(function (c) { chips.push({ k: c, t: c, n: selBy[c] }); });
+    if (none && cats.length) chips.push({ k: "__none", t: "Khác", n: selBy.__none });
+    $("#nCats").innerHTML = chips.length > 1 ? chips.map(function (c) {
+      return '<button class="cat' + (c.k === nCat && !nQ.trim() ? " on" : "") + '" data-ncat="' + esc(c.k) + '">' + esc(c.t) + (c.n ? " · " + c.n : "") + "</button>";
+    }).join("") : "";
+
+    var q = fold(nQ.trim());
+    var list = items.filter(function (m) {
+      var c = (m.cat || "").trim();
+      if (q) return fold(m.name).indexOf(q) >= 0;   // đang tìm: tìm trong toàn bộ thực đơn
+      if (nCat === "__none") return !c;
+      return nCat === "__all" || c === nCat;
+    });
+    var html = "", lastCat = null, heads = nCat === "__all" && !q;
+    list.forEach(function (m) {
       var cat = (m.cat || "").trim();
-      if (cat !== lastCat) { if (cat) html += '<div class="catline">' + esc(cat) + "</div>"; lastCat = cat; }
-      var q = cart[m.id] || 0;
+      if (heads && cat !== lastCat) { if (cat) html += '<div class="catline">' + esc(cat) + "</div>"; lastCat = cat; }
+      var n = cart[m.id] || 0;
       html += '<div class="stepper-row"><span>' + esc(m.name) + '<br><small style="color:var(--muted)">' + money(m.price) + "</small></span><div class=\"qty\">" +
-        (q ? '<button class="minus" data-n="dec" data-id="' + esc(m.id) + '">−</button><span>' + q + "</span>" : "") +
+        (n ? '<button class="minus" data-n="dec" data-id="' + esc(m.id) + '">−</button><span>' + n + "</span>" : "") +
         '<button data-n="inc" data-id="' + esc(m.id) + '">+</button></div></div>';
     });
-    $("#newMenu").innerHTML = html || '<div style="color:var(--muted);padding:12px;text-align:center">Chưa có món nào đang bán.</div>';
-    var total = cartLines().reduce(function (s, l) { return s + l.price * l.qty; }, 0);
+    $("#newMenu").innerHTML = html || '<div style="color:var(--muted);padding:12px;text-align:center">' + (items.length ? "Không có món nào khớp." : "Chưa có món nào đang bán.") + "</div>";
+
+    var lines = cartLines();
+    $("#nPicked").innerHTML = lines.length ? '<div class="catline" style="margin-top:0">Món đã chọn</div>' + lines.map(function (l) {
+      return '<div class="stepper-row"><span>' + esc(l.name) + " × " + l.qty + "</span><b>" + money(l.price * l.qty) + "</b></div>";
+    }).join("") : '<div style="color:var(--muted);font-size:13px">Chưa chọn món nào. Bấm dấu + ở danh sách phía trên.</div>';
+    var total = lines.reduce(function (s, l) { return s + l.price * l.qty; }, 0);
     $("#nTotal").textContent = money(total);
-    $("#nCreate").disabled = total <= 0 && cartLines().length === 0;
+    $("#nCreate").disabled = lines.length === 0;
   }
+  $("#nCats").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-ncat]"); if (!b) return;
+    nCat = b.getAttribute("data-ncat"); renderNew();
+  });
+  $("#nSearch").addEventListener("input", function () { nQ = this.value; renderNew(); });
   $("#newMenu").addEventListener("click", function (e) {
     var b = e.target.closest("[data-n]"); if (!b) return;
     var id = b.getAttribute("data-id");
@@ -215,7 +249,7 @@
     if (tbl) { order.table = tbl; order.billStatus = "open"; }
     var btn = this; btn.disabled = true; btn.textContent = "Đang tạo…";
     Store.addOrder(order).then(function () {
-      cart = {}; $("#nName").value = ""; $("#nNote").value = ""; $("#nTable").value = ""; renderNew();
+      cart = {}; $("#nName").value = ""; $("#nNote").value = ""; $("#nTable").value = ""; $("#nSearch").value = ""; nQ = ""; renderNew();
       var dine = !!order.table;
       $("#dlgBody").innerHTML = '<button class="x" data-d="close">✕</button><div class="success"><div class="big">✅</div><h2>Đã tạo đơn #' + esc(code) + "</h2><p>" + money(total) + " · " + esc(order.method) +
         (dine ? " · <b>" + esc(Tables.label(tbl)) + "</b><br>Chưa tính tiền: bấm “Tính tiền” ở tab Bàn khi khách xong." : "") + "</p>" +
