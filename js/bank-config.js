@@ -17,10 +17,10 @@
  *    Bac A Bank 970409 · ABBANK 970425 · PVcomBank 970412 · NCB 970419
  * ============================================================ */
 window.BANK = {
-  bankBin: "",                 // mã BIN 6 số của ngân hàng, ví dụ "970436"
-  bankName: "",                // tên hiển thị cho khách, ví dụ "Vietcombank"
-  accountNo: "",               // số tài khoản, ví dụ "0123456789"
-  accountName: "",             // tên chủ tài khoản VIẾT HOA không dấu, ví dụ "NGUYEN VAN A"
+  bankBin: "970407",                 // mã BIN 6 số của ngân hàng, ví dụ "970436"
+  bankName: "Techcombank",                // tên hiển thị cho khách, ví dụ "Vietcombank"
+  accountNo: "8626052605",               // số tài khoản, ví dụ "0123456789"
+  accountName: "NGUYEN DUY KHANH",             // tên chủ tài khoản VIẾT HOA không dấu, ví dụ "NGUYEN VAN A"
   notePrefix: "DH ",           // chữ đứng trước mã đơn trong nội dung CK → "DH A3F9"
   qrMode: "local"              // "local": web tự tạo QR (khuyên dùng, không phụ thuộc ai)
                                // "vietqr": dùng ảnh QR của img.vietqr.io (dự phòng nếu "local" không quét được)
