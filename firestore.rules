@@ -2,11 +2,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Chỉ đúng tài khoản Google của chủ quán (đã xác minh email)
+    // Chủ quán: đúng tài khoản Google đã xác minh email
     function isOwner() {
       return request.auth != null
         && request.auth.token.email == 'duykhanh2605.pq@gmail.com'
         && request.auth.token.email_verified == true;
+    }
+
+    // Nhân viên: có tài liệu staff/<email viết thường> do chủ quán tạo
+    function isStaff() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/staff/$(request.auth.token.email.lower()));
     }
 
     // Thông tin quán + thực đơn: ai cũng xem được, chỉ chủ quán được sửa
@@ -15,15 +22,47 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
-    // Đơn hàng: khách được tạo đơn mới (không đăng nhập), chỉ chủ quán đọc/sửa/xoá
+    // Danh sách nhân viên: chỉ chủ quán quản lý; nhân viên chỉ đọc được tài liệu của chính mình
+    match /staff/{id} {
+      allow read: if isOwner()
+        || (request.auth != null && request.auth.token.email.lower() == id);
+      allow write: if isOwner();
+    }
+
+    // Đơn hàng
     match /orders/{id} {
+      // Không cho khách tự đặt đơn "đã thanh toán"; số bàn là chữ ngắn
+      function cleanExtras() {
+        return (!('billStatus' in request.resource.data) || request.resource.data.billStatus == 'open')
+          && (!('table' in request.resource.data) || (request.resource.data.table is string && request.resource.data.table.size() <= 12));
+      }
+      // Nhân viên: đổi đơn từ 'new' sang 'done'
+      function staffDone() {
+        return resource.data.status == 'new'
+          && request.resource.data.status == 'done'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'doneBy']);
+      }
+      // Nhân viên: tính tiền bàn (billStatus từ 'open' sang 'paid')
+      function staffPay() {
+        return resource.data.billStatus == 'open'
+          && request.resource.data.billStatus == 'paid'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['billStatus', 'paidAt', 'paidBy', 'payMethod', 'billCode']);
+      }
+
+      // Khách (không đăng nhập) và nhân viên được tạo đơn mới ở trạng thái 'new'
       allow create: if isOwner() || (
         request.resource.data.status == 'new'
         && request.resource.data.items is list
         && request.resource.data.items.size() > 0
         && request.resource.data.items.size() <= 50
+        && cleanExtras()
       );
-      allow read, update, delete: if isOwner();
+      // Chủ quán và nhân viên được xem đơn
+      allow read: if isOwner() || isStaff();
+      // Nhân viên CHỈ được: xong đơn, hoặc tính tiền bàn (không sửa món/giá, không huỷ, không mở lại)
+      allow update: if isOwner() || (isStaff() && (staffDone() || staffPay()));
+      // Chỉ chủ quán được xoá đơn
+      allow delete: if isOwner();
     }
   }
 }
