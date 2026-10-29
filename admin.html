@@ -39,6 +39,8 @@
           <button class="tab on" data-tab="info">🏠 Thông tin</button>
           <button class="tab" data-tab="menu">🧋 Thực đơn</button>
           <button class="tab" data-tab="rev">📊 Doanh thu<span class="n hidden" id="newBadge">0</span></button>
+          <button class="tab" data-tab="tables">🪑 Bàn<span class="n hidden" id="tblBadge">0</span></button>
+          <button class="tab" data-tab="staff">👥 Nhân viên</button>
         </div>
       </div>
     </div>
@@ -67,9 +69,36 @@
 
       <!-- Thực đơn -->
       <div class="panel hidden" id="panel-menu">
+        <input id="menuSearch" type="search" placeholder="🔍 Tìm món theo tên…" autocomplete="off">
+        <div class="cats" id="menuCats"></div>
+        <div class="menuinfo"><span id="menuInfo"></span><button class="btn ghost sm hidden" id="catRename">✏️ Đổi tên nhóm</button></div>
         <div id="menuList"></div>
         <button class="btn block" id="addItem">+ Thêm món mới</button>
         <datalist id="catList"></datalist>
+      </div>
+
+      <!-- Bàn đang mở -->
+      <div class="panel hidden" id="panel-tables">
+        <div style="color:var(--muted);font-size:13px;margin:4px 0 8px">Các bàn uống tại quán chưa tính tiền. Doanh thu của bàn chỉ được tính sau khi bấm “Tính tiền”.</div>
+        <div id="tablesAdmin"></div>
+      </div>
+
+      <!-- Nhân viên -->
+      <div class="panel hidden" id="panel-staff">
+        <div class="card">
+          <h3>Thêm nhân viên</h3>
+          <p style="color:var(--muted);font-size:13px;margin:2px 0 6px">Nhân viên đăng nhập bằng Gmail tại trang nhân viên. Thêm/xoá có hiệu lực ngay, không cần bấm Lưu.</p>
+          <label class="f">Gmail của nhân viên</label><input id="stEmail" type="email" inputmode="email" autocapitalize="off" placeholder="nhanvien@gmail.com">
+          <label class="f">Tên gọi</label><input id="stName" placeholder="Ví dụ: Lan">
+          <button class="btn block" id="stAdd" style="margin-top:14px">+ Thêm nhân viên</button>
+        </div>
+        <div class="card"><h3>Danh sách nhân viên</h3><div id="stList"></div></div>
+        <div class="card">
+          <h3>Link trang nhân viên</h3>
+          <input id="stLink" readonly style="margin-top:8px">
+          <button class="btn ghost sm" id="stCopy" style="margin-top:8px">📋 Sao chép link</button>
+          <p style="color:var(--muted);font-size:12.5px;margin:10px 0 0">Nhân viên chỉ xem đơn, đặt món và bấm “Xong đơn”. Không có nút xoá, huỷ, và không thấy doanh thu.</p>
+        </div>
       </div>
 
       <!-- Doanh thu -->
@@ -81,6 +110,7 @@
           <button class="chip" data-range="all">Tất cả</button>
         </div>
         <div class="stats" id="stats"></div>
+        <p style="color:var(--muted);font-size:12.5px;margin:-4px 0 12px">Đơn uống tại bàn chỉ tính doanh thu sau khi đã bấm “Tính tiền”.</p>
         <div class="card"><h3>Doanh thu 7 ngày gần nhất</h3><div class="bars" id="bars"></div></div>
         <div class="card"><h3>Món bán chạy</h3><div id="top"></div></div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0 10px">
@@ -109,12 +139,17 @@
   </section>
 
   <dialog id="manualDlg"><div class="dlg" id="manualBody"></div></dialog>
+  <dialog id="billDlg"><div class="dlg" id="billBody"></div></dialog>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="js/firebase-config.js"></script>
   <script src="js/store.js"></script>
+  <script src="js/bank-config.js"></script>
+  <script src="js/qrcode-lib.js"></script>
+  <script src="js/payment.js"></script>
+  <script src="js/tables.js"></script>
   <script src="js/admin.js"></script>
 </body>
 </html>

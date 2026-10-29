@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Nhân viên</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Đăng nhập -->
+  <section id="loginView" class="hidden">
+    <div class="login-box">
+      <div class="big">🧑‍🍳</div>
+      <h2>Dành cho nhân viên</h2>
+      <p style="color:var(--muted)">Đăng nhập bằng Gmail mà chủ quán đã thêm cho bạn.</p>
+      <button class="btn block" id="loginBtn">Đăng nhập với Google</button>
+      <div class="err hidden" id="loginErr"></div>
+      <div class="demo hidden" id="demoNote">Đang ở CHẾ ĐỘ DEMO (chưa cấu hình Firebase): dữ liệu chỉ lưu trong trình duyệt này.</div>
+      <p style="margin-top:18px"><a href="index.html">← Về trang khách</a></p>
+    </div>
+  </section>
+
+  <!-- Làm việc -->
+  <section id="appView" class="hidden">
+    <div class="adminbar">
+      <div class="wrap">
+        <div class="in">
+          <div><b id="barName">Nhân viên</b><div class="who" id="who"></div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="btn ghost sm" id="bellBtn">🔕 Chuông: Tắt</button>
+            <button class="btn ghost sm" id="logoutBtn">Đăng xuất</button>
+          </div>
+        </div>
+        <div class="tabs" id="tabs">
+          <button class="tab on" data-tab="orders">📋 Đơn<span class="n hidden" id="newBadge">0</span></button>
+          <button class="tab" data-tab="tables">🪑 Bàn<span class="n hidden" id="tblBadge">0</span></button>
+          <button class="tab" data-tab="new">➕ Đặt món</button>
+        </div>
+      </div>
+    </div>
+
+    <main class="wrap">
+      <!-- Danh sách đơn -->
+      <div class="panel" id="panel-orders">
+        <div class="sec"><span>Đơn chờ làm</span><small id="pendCount"></small></div>
+        <div id="pending"></div>
+        <div class="sec"><span>Đã xong hôm nay</span><small id="doneCount"></small></div>
+        <div id="done"></div>
+      </div>
+
+      <!-- Các bàn đang mở: gộp bill, tính tiền -->
+      <div class="panel hidden" id="panel-tables">
+        <div style="color:var(--muted);font-size:13px;margin:4px 0 8px">Mỗi bàn gộp tất cả các lần gọi món. Bấm “Tính tiền” khi khách muốn thanh toán.</div>
+        <div id="tables"></div>
+      </div>
+
+      <!-- Đặt món tại quầy -->
+      <div class="panel hidden" id="panel-new">
+        <div class="card">
+          <div id="newMenu"></div>
+        </div>
+        <div class="card">
+          <label class="f" style="margin-top:0">Tên khách (không bắt buộc)</label><input id="nName" placeholder="Khách tại quán">
+          <label class="f">Hình thức</label>
+          <select id="nMethod"><option>Uống tại quán</option><option>Mang đi</option></select>
+          <div id="nTableBox"><label class="f">Số bàn *</label><input id="nTable" list="nTables" maxlength="10" autocomplete="off" placeholder="Ví dụ: 5"><datalist id="nTables"></datalist>
+            <div class="hintsm">Khách gọi thêm? Nhập lại đúng số bàn cũ để gộp chung một hoá đơn.</div></div>
+          <label class="f">Ghi chú (đường, đá, topping…)</label><textarea id="nNote" placeholder="Ví dụ: ít ngọt, thêm trân châu"></textarea>
+          <div class="total"><span>Tổng cộng</span><span id="nTotal">0đ</span></div>
+          <button class="btn block" id="nCreate" disabled>Tạo đơn</button>
+        </div>
+      </div>
+    </main>
+  </section>
+
+  <dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
+  <dialog id="billDlg"><div class="dlg" id="billBody"></div></dialog>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/bank-config.js"></script>
+  <script src="js/qrcode-lib.js"></script>
+  <script src="js/payment.js"></script>
+  <script src="js/tables.js"></script>
+  <script src="js/staff.js"></script>
+</body>
+</html>
