@@ -73,6 +73,22 @@
       isStaff: function (email) {
         return db.doc("staff/" + String(email).trim().toLowerCase()).get().then(function (s) { return s.exists; });
       },
+      isOwner: function (email) {
+        email = String(email).trim().toLowerCase();
+        if (email === OWNER) return Promise.resolve(true);
+        return db.doc("owners/" + email).get().then(function (s) { return s.exists; }).catch(function () { return false; });
+      },
+      subscribeOwners: function (cb) {
+        return db.collection("owners").onSnapshot(
+          function (sn) { cb(sn.docs.map(function (d) { var x = d.data(); x.email = (x.email || d.id).toLowerCase(); return x; })); },
+          function (e) { console.error(e); }
+        );
+      },
+      addOwner: function (email, name) {
+        email = String(email).trim().toLowerCase();
+        return db.doc("owners/" + email).set({ email: email, name: name || "", addedAt: Date.now() });
+      },
+      removeOwner: function (email) { return db.doc("owners/" + String(email).trim().toLowerCase()).delete(); },
       subscribeOrders: function (cb) {
         return db.collection("orders").orderBy("createdAt", "desc").limit(2000).onSnapshot(
           function (sn) { cb(sn.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; })); },
@@ -156,6 +172,20 @@
       isStaff: function (email) {
         email = String(email).trim().toLowerCase();
         return Promise.resolve(read("tra_staff", []).some(function (x) { return x.email === email; }));
+      },
+      isOwner: function (email) {
+        email = String(email).trim().toLowerCase();
+        return Promise.resolve(email === OWNER || read("tra_owners", []).some(function (x) { return x.email === email; }));
+      },
+      subscribeOwners: function (cb) { return sub("tra_owners", function () { return read("tra_owners", []); }, cb); },
+      addOwner: function (email, name) {
+        email = String(email).trim().toLowerCase();
+        var l = read("tra_owners", []).filter(function (x) { return x.email !== email; });
+        l.push({ email: email, name: name || "", addedAt: Date.now() }); write("tra_owners", l); return Promise.resolve();
+      },
+      removeOwner: function (email) {
+        email = String(email).trim().toLowerCase();
+        write("tra_owners", read("tra_owners", []).filter(function (x) { return x.email !== email; })); return Promise.resolve();
       },
       subscribeOrders: function (cb) {
         return sub("tra_orders", function () { return read("tra_orders", []).sort(function (a, b) { return b.createdAt - a.createdAt; }); }, cb);

@@ -23,6 +23,7 @@
   var orders = [], range = "today", stFilter = "all", tab = "info";
   var meEmail = "", unsubShop = null, unsubOrders = null, unsubStaff = null, unsubReq = null, reqs = [], reqSeen = null, staffList = [], loginMsg = "";
 
+  var authSeq = 0, ownerList = [], unsubOwners = null;
   /* ---------- Đăng nhập ---------- */
   function showLogin() {
     $("#appView").classList.add("hidden");
@@ -35,6 +36,7 @@
     if (unsubShop) { unsubShop(); unsubShop = null; }
     if (unsubOrders) { unsubOrders(); unsubOrders = null; }
     if (unsubStaff) { unsubStaff(); unsubStaff = null; }
+    if (unsubOwners) { unsubOwners(); unsubOwners = null; } ownerList = [];
     if (unsubReq) { unsubReq(); unsubReq = null; } reqs = []; reqSeen = null;
     draft = saved = null; dirty = false; orders = []; seen = null;
   }
@@ -126,6 +128,9 @@
         renderTables();
       });
     }
+    var isMain = String(user.email || "").toLowerCase() === OWNER;
+    $("#ownerCard").classList.toggle("hidden", !isMain);
+    if (isMain && !unsubOwners) unsubOwners = Store.subscribeOwners(function (list) { ownerList = list; renderOwners(); });
     if (!unsubStaff) {
       unsubStaff = Store.subscribeStaff(function (list) { staffList = list; renderStaff(); renderRevenue(); renderTables(); });
     }
@@ -133,16 +138,22 @@
 
   Store.onAuth(function (user) {
     if (!user) { stopListening(); showLogin(); return; }
-    var ok = user.email && user.email.toLowerCase() === OWNER && user.verified !== false;
-    if (!ok) {
-      loginMsg = "Tài khoản " + (user.email || "") + " không có quyền quản lý quán này.";
-      stopListening();
-      showLogin();
-      Store.logout();
-      return;
-    }
-    loginMsg = "";
-    showApp(user);
+    var email = String(user.email || "").toLowerCase();
+    if (meEmail && meEmail.toLowerCase() === email && !$("#appView").classList.contains("hidden")) return;
+    var token = ++authSeq;
+    var pass = user.verified === false ? Promise.resolve(false) : (email === OWNER ? Promise.resolve(true) : Store.isOwner(email));
+    pass.then(function (ok) {
+      if (token !== authSeq) return;
+      if (!ok) {
+        loginMsg = "Tài khoản " + (user.email || "") + " không có quyền quản lý quán này.";
+        stopListening();
+        showLogin();
+        Store.logout();
+        return;
+      }
+      loginMsg = "";
+      showApp(user);
+    });
   });
 
   $("#loginBtn").addEventListener("click", function () {
@@ -231,6 +242,28 @@
         '<button class="btn danger sm" data-rm="' + esc(x.email) + '">Xoá</button></div>';
     }).join("") : '<div style="color:var(--muted);padding:8px 0">Chưa có nhân viên nào.</div>';
   }
+  function renderOwners() {
+    var l = ownerList.slice().sort(function (a, b) { return (a.addedAt || 0) - (b.addedAt || 0); });
+    $("#owList").innerHTML = l.length ? l.map(function (x) {
+      return '<div class="stepper-row"><span><b>' + esc(x.name || x.email.split("@")[0]) + '</b><br><small style="color:var(--muted)">' + esc(x.email) + '</small></span>' +
+        '<button class="btn danger sm" data-rmo="' + esc(x.email) + '">Xoá</button></div>';
+    }).join("") : '<div style="color:var(--muted);padding:8px 0">Chưa có chủ quán phụ nào.</div>';
+  }
+  $("#owAdd").addEventListener("click", function () {
+    var email = $("#owEmail").value.trim().toLowerCase(), name = $("#owName").value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert("Gmail chưa đúng định dạng."); $("#owEmail").focus(); return; }
+    if (email === OWNER) { alert("Đây là email chủ quán chính, không cần thêm."); return; }
+    Store.addOwner(email, name).then(function () {
+      $("#owEmail").value = ""; $("#owName").value = ""; toast("Đã thêm chủ quán phụ ✓");
+    }).catch(function (e) { alert("Chưa thêm được: " + (e && e.message ? e.message : e)); });
+  });
+  $("#owList").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-rmo]"); if (!b) return;
+    var em = b.getAttribute("data-rmo");
+    if (!confirm("Xoá chủ quán phụ " + em + "? Người này sẽ không vào được trang quản lý nữa.")) return;
+    Store.removeOwner(em).then(function () { toast("Đã xoá chủ quán phụ"); })
+      .catch(function (err) { alert("Chưa xoá được: " + (err && err.message ? err.message : err)); });
+  });
   $("#stLink").value = new URL("staff.html", location.href).href;
   $("#stCopy").addEventListener("click", function () {
     var v = $("#stLink").value;

@@ -64,7 +64,7 @@
     var email = String(user.email || "").toLowerCase();
     if ((me && me.email === email) || checking === email) return;
     checking = email;
-    var pass = email === Store.OWNER ? Promise.resolve(true) : Store.isStaff(email);
+    var pass = email === Store.OWNER ? Promise.resolve(true) : Store.isStaff(email).then(function (ok) { return ok || Store.isOwner(email); });
     pass.then(function (ok) {
       if (checking !== email) return;
       if (!ok || user.verified === false) {
