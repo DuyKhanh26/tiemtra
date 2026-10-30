@@ -130,7 +130,7 @@
     }
     var isMain = String(user.email || "").toLowerCase() === OWNER;
     $("#ownerCard").classList.toggle("hidden", !isMain);
-    if (isMain && !unsubOwners) unsubOwners = Store.subscribeOwners(function (list) { ownerList = list; renderOwners(); });
+    if (!unsubOwners) unsubOwners = Store.subscribeOwners(function (list) { ownerList = list; renderOwners(); });
     if (!unsubStaff) {
       unsubStaff = Store.subscribeStaff(function (list) { staffList = list; renderStaff(); renderRevenue(); renderTables(); });
     }
@@ -232,6 +232,8 @@
   /* ---------- Nhân viên ---------- */
   function staffName(email) {
     var e = String(email || "").toLowerCase();
+    if (e === OWNER) return "Chủ quán";
+    for (var j = 0; j < ownerList.length; j++) if (ownerList[j].email === e && ownerList[j].name) return ownerList[j].name;
     for (var i = 0; i < staffList.length; i++) if (staffList[i].email === e && staffList[i].name) return staffList[i].name;
     return e;   // chưa đặt tên thì hiện Gmail đầy đủ
   }
@@ -515,7 +517,8 @@
     else acts = '<button class="btn ghost sm" data-act="new">Mở lại</button>';
     if (!o.table && o.source !== "shop" && o.status !== "cancelled")
       acts = (o.orderPaid ? '<button class="btn ghost sm" data-act="unpaid">↩ Bỏ “đã thanh toán”</button>' : '<button class="btn sm" data-act="paid">💰 Đã thanh toán</button>') + acts;
-    acts += '<button class="btn danger sm" data-act="del">🗑</button>';
+    // Xoá hẳn: CHỈ chủ quán chính (chống người phá đơn). Chủ phụ và nhân viên dùng "Huỷ đơn" (có ghi tên).
+    if (String(meEmail).toLowerCase() === OWNER) acts += '<button class="btn danger sm" data-act="del">🗑 Xoá đơn</button>';
     return '<div class="order ' + esc(o.status) + '" data-id="' + esc(o.id) + '">' +
       '<div class="h"><span>#' + esc(o.code || "") + ' <span class="tagx ' + esc(o.status) + '">' + esc(ST[o.status] || o.status) + '</span><span class="tagx">' + (SRC[o.source] || "Tại quán") + "</span>" + (o.table ? '<span class="tagx tb">Bàn ' + esc(o.table) + "</span>" : "") + Tables.payTag(o) + "</span><span>" + money(orderTotal(o)) + "</span></div>" +
       '<div class="sub">' + fmtTime(o.createdAt) + " · " + esc(c.name || "") + (c.phone ? ' · <a href="tel:' + esc(String(c.phone).replace(/\D/g, "")) + '">' + esc(c.phone) + "</a>" : "") + "</div>" +
@@ -526,6 +529,7 @@
       (o.table ? '<div class="sub">' + (o.billStatus === "paid" ? "💰 Đã tính tiền (" + (o.payMethod === "cash" ? "tiền mặt" : "chuyển khoản") + ") · " + esc(staffName(o.paidBy)) : "⏳ Bàn chưa tính tiền") + (o.movedFrom ? " · chuyển từ Bàn " + esc(o.movedFrom) + " (" + esc(staffName(o.movedBy)) + ")" : "") + "</div>" : "") +
       (o.orderPaid && !o.table ? '<div class="sub">💰 Đã thanh toán · xác nhận bởi ' + esc(staffName(o.orderPaidBy)) + "</div>" : "") +
       (o.createdBy || o.doneBy ? '<div class="sub">' + (o.createdBy ? "Nhập bởi " + esc(staffName(o.createdBy)) : "") + (o.createdBy && o.doneBy ? " · " : "") + (o.doneBy ? "Xong bởi " + esc(staffName(o.doneBy)) : "") + "</div>" : "") +
+      (o.cancelledBy ? '<div class="sub">Huỷ bởi ' + esc(staffName(o.cancelledBy)) + "</div>" : "") +
       (o.note ? '<div class="sub">📝 ' + esc(o.note) + "</div>" : "") +
       '<div class="acts">' + acts + "</div></div>";
   }
@@ -546,10 +550,17 @@
     var b = e.target.closest("[data-act]"); if (!b) return;
     var id = b.closest(".order").getAttribute("data-id"), act = b.getAttribute("data-act");
     var p;
+    if (act === "cancelled" && !confirm("Huỷ đơn này? Tên bạn sẽ được ghi lại là người huỷ.")) return;
     if (act === "del") { if (!confirm("Xoá hẳn đơn này?")) return; p = Store.deleteOrder(id); }
     else if (act === "paid") p = Store.updateOrder(id, { orderPaid: true, orderPaidAt: Date.now(), orderPaidBy: meEmail });
     else if (act === "unpaid") p = Store.updateOrder(id, { orderPaid: false });
-    else p = Store.updateOrder(id, { status: act, updatedAt: Date.now() });
+    else {
+      var patch = { status: act, updatedAt: Date.now() };
+      if (act === "done") patch.doneBy = meEmail;
+      else if (act === "cancelled") patch.cancelledBy = meEmail;
+      else if (act === "new") { patch.doneBy = ""; patch.cancelledBy = ""; }
+      p = Store.updateOrder(id, patch);
+    }
     p.catch(function (err) { alert("Chưa cập nhật được: " + (err && err.message ? err.message : err)); });
   });
 

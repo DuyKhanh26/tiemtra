@@ -154,7 +154,7 @@
         return "<li><b>" + esc(it.name) + " × " + esc(it.qty) + "</b>" + (it.sugar ? ' <span class="sub">(' + esc(it.sugar) + " đường, " + esc(it.ice) + ")</span>" : "") + "</li>";
       }).join("") + "</ul>" +
       (o.note ? '<div class="sub">📝 ' + esc(o.note) + "</div>" : "") +
-      (isPending ? '<div class="acts">' + (!o.table && !o.orderPaid && o.source !== "shop" ? '<button class="btn block" data-act="paid">💰 Đã thanh toán</button>' : "") + '<button class="btn ok block" data-act="done">✓ Xong đơn</button></div>' : (o.doneBy ? '<div class="sub">Xong bởi ' + esc(String(o.doneBy).split("@")[0]) + "</div>" : "")) +
+      (isPending ? '<div class="acts">' + (!o.table && !o.orderPaid && o.source !== "shop" ? '<button class="btn block" data-act="paid">💰 Đã thanh toán</button>' : "") + '<button class="btn ok block" data-act="done">✓ Xong đơn</button><button class="btn danger" data-act="cancel">Huỷ đơn</button></div>' : (o.doneBy ? '<div class="sub">Xong bởi ' + esc(String(o.doneBy).split("@")[0]) + "</div>" : "")) +
       "</div>";
   }
   function renderOrders() {
@@ -178,6 +178,16 @@
       Store.updateOrder(pc.getAttribute("data-id"), { orderPaid: true, orderPaidAt: Date.now(), orderPaidBy: me.email })
         .then(function () { toast("Đã ghi nhận thanh toán ✓"); })
         .catch(function (err) { pb.disabled = false; alert("Chưa cập nhật được: " + (err && err.message ? err.message : err)); });
+      return;
+    }
+    var cb = e.target.closest('[data-act="cancel"]');
+    if (cb) {
+      var cc = cb.closest(".order"), ccode = ((cc.querySelector(".h span") || {}).textContent || "").trim().split(" ")[0];
+      if (!confirm("Huỷ đơn " + ccode + "? Tên bạn sẽ được ghi lại là người huỷ.")) return;
+      cb.disabled = true;
+      Store.updateOrder(cc.getAttribute("data-id"), { status: "cancelled", updatedAt: Date.now(), cancelledBy: String(me.email).toLowerCase() })
+        .then(function () { toast("Đã huỷ đơn"); })
+        .catch(function (err) { cb.disabled = false; alert("Chưa huỷ được: " + (err && err.message ? err.message : err)); });
       return;
     }
     var b = e.target.closest('[data-act="done"]'); if (!b) return;
