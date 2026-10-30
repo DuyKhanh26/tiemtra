@@ -234,3 +234,5 @@ footer.foot { text-align: center; color: var(--muted); font-size: 13px; padding:
 .starbtn { border: 0; background: transparent; font-size: 22px; line-height: 1; color: #b9c3c7; padding: 0 4px; cursor: pointer; }
 .starbtn.on { color: #f5a300; text-shadow: 0 0 6px rgba(245,163,0,.5); }
 .item.off .szs .qty { display: none; }
+.tagx.paid { background: #d9f3e3; color: #1c7a43; }
+.tagx.unpaid { background: #fff0d6; color: #a86400; }
