@@ -25,11 +25,16 @@
     if (pl > 0) r.push({ n: "L", p: pl });
     return r;
   }
+  /* Hết món theo từng size (hoặc cả món nếu không chia size): khoá "id" hoặc "id|M" nằm trong danh sách hết */
+  var OFF = {};
+  function setOff(list) { OFF = {}; (list || []).forEach(function (k) { OFF[k] = 1; }); }
+  function isOff(key) { return !!OFF[key]; }
+
   /* Mỗi "biến thể" = một dòng có thể đặt: key là id món (hoặc "id|M", "id|L" nếu có size) */
   function variants(m) {
     var s = sizesOf(m);
-    if (!s.length) return [{ key: m.id, id: m.id, size: "", name: m.name, price: Number(m.price) || 0, item: m }];
-    return s.map(function (x) { return { key: m.id + "|" + x.n, id: m.id, size: x.n, name: m.name + " (" + x.n + ")", price: x.p, item: m }; });
+    if (!s.length) return [{ key: m.id, id: m.id, size: "", name: m.name, price: Number(m.price) || 0, item: m, off: isOff(m.id) }];
+    return s.map(function (x) { var k = m.id + "|" + x.n; return { key: k, id: m.id, size: x.n, name: m.name + " (" + x.n + ")", price: x.p, item: m, off: isOff(k) }; });
   }
   function findVariant(menu, key) {
     var list = menu || [];
@@ -41,7 +46,7 @@
   }
   function priceText(m) {
     var s = sizesOf(m);
-    return s.length ? s.map(function (x) { return x.n + " " + money(x.p); }).join(" · ") : money(m.price);
+    return s.length ? s.map(function (x) { return x.n + " " + money(x.p) + (isOff(m.id + "|" + x.n) ? " (hết)" : ""); }).join(" · ") : money(m.price) + (isOff(m.id) ? " (hết)" : "");
   }
   function starHtml(m) { return m && m.best ? ' <span class="star" title="Best-Seller">★</span>' : ""; }
   function orderTotal(o) {
@@ -237,6 +242,6 @@
     };
   }
 
-  window.Tables = { norm: norm, label: label, group: group, cardsHtml: cardsHtml, paidGroups: paidGroups, paidHtml: paidHtml, createBillUI: createBillUI, payTag: payTag, filterTables: filterTables, reqHtml: reqHtml, noHit: NOHIT, bindRequests: bindRequests, bindManualOpen: bindManualOpen, orderTotal: orderTotal,
+  window.Tables = { norm: norm, label: label, group: group, cardsHtml: cardsHtml, paidGroups: paidGroups, paidHtml: paidHtml, createBillUI: createBillUI, setOff: setOff, isOff: isOff, payTag: payTag, filterTables: filterTables, reqHtml: reqHtml, noHit: NOHIT, bindRequests: bindRequests, bindManualOpen: bindManualOpen, orderTotal: orderTotal,
     sizesOf: sizesOf, variants: variants, findVariant: findVariant, priceText: priceText, starHtml: starHtml };
 })();

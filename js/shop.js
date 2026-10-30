@@ -33,7 +33,7 @@
   function syncCart() {
     Object.keys(cart).forEach(function (key) {
       var v = Tables.findVariant(shop.menu, key);
-      if (!v || v.item.available === false || !(cart[key].qty > 0)) delete cart[key];
+      if (!v || v.item.available === false || v.off || !(cart[key].qty > 0)) delete cart[key];
     });
     saveCart();
   }
@@ -97,6 +97,7 @@
     $("#menu").innerHTML = list.map(function (m) {
       var off = m.available === false;
       var vs = Tables.variants(m), sized = vs[0].size !== "";
+      if (!off && vs.every(function (v) { return v.off; })) off = true;
       function ctlFor(v) {
         var q = cart[v.key] ? cart[v.key].qty : 0;
         return '<div class="qty">' +
@@ -107,7 +108,8 @@
       if (off) ctl = '<span class="tag-off">Tạm hết</span>';
       if (sized) {
         prices = '<div class="szs">' + vs.map(function (v) {
-          return '<div class="sz"><span class="szn">' + esc(v.size) + '</span><span class="szp">' + money(v.price) + "</span>" + (off || !isOpen() ? "" : ctlFor(v)) + "</div>";
+          return '<div class="sz' + (v.off ? " szoff" : "") + '"><span class="szn">' + esc(v.size) + '</span><span class="szp">' + money(v.price) + "</span>" +
+            (v.off ? '<span class="tag-off">Hết</span>' : (off || !isOpen() ? "" : ctlFor(v))) + "</div>";
         }).join("") + "</div>";
         if (!off) ctl = "";
       } else {
@@ -363,6 +365,7 @@
   $("#cartDlg").addEventListener("click", function (e) { if (e.target === this) this.close(); });
 
   /* ---------- Khởi động: nghe dữ liệu quán theo thời gian thực ---------- */
+  Store.subscribeSoldOut(function (list) { Tables.setOff(list); if (shop) { syncCart(); renderAll(); } });
   Store.subscribeShop(function (s) {
     shop = s;
     syncCart();

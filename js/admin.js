@@ -21,7 +21,7 @@
   var ST = { new: "Chờ xử lý", done: "Hoàn thành", cancelled: "Đã huỷ" };
   var SRC = { web: "Web", shop: "Tại quán", staff: "Nhân viên" };
   var orders = [], range = "today", stFilter = "all", tab = "info";
-  var meEmail = "", unsubShop = null, unsubOrders = null, unsubStaff = null, unsubReq = null, reqs = [], reqSeen = null, staffList = [], loginMsg = "";
+  var meEmail = "", unsubShop = null, unsubOrders = null, unsubStaff = null, unsubSold = null, unsubReq = null, reqs = [], reqSeen = null, staffList = [], loginMsg = "";
 
   var authSeq = 0, ownerList = [], unsubOwners = null;
   /* ---------- Đăng nhập ---------- */
@@ -37,6 +37,7 @@
     if (unsubOrders) { unsubOrders(); unsubOrders = null; }
     if (unsubStaff) { unsubStaff(); unsubStaff = null; }
     if (unsubOwners) { unsubOwners(); unsubOwners = null; } ownerList = [];
+    if (unsubSold) { unsubSold(); unsubSold = null; }
     if (unsubReq) { unsubReq(); unsubReq = null; } reqs = []; reqSeen = null;
     draft = saved = null; dirty = false; orders = []; seen = null;
   }
@@ -118,6 +119,7 @@
     if (!unsubOrders) {
       unsubOrders = Store.subscribeOrders(function (list) { detectNew(list); orders = list; renderRevenue(); renderTables(); });
     }
+    if (!unsubSold) unsubSold = Store.subscribeSoldOut(function (list) { Tables.setOff(list); if (draft) renderMenu(); if ($("#manualDlg").open) renderManual(); });
     if (!unsubReq) {
       unsubReq = Store.subscribeRequests(function (list) {
         if (reqSeen === null) reqSeen = {};
@@ -315,6 +317,10 @@
       '<div class="full hintsm" style="margin:0">Nhập giá size M và/hoặc L thì khách chọn theo size (giá ở ô “Giá” sẽ không dùng). Để trống cả hai nếu món chỉ có một giá.</div>' +
       '<div class="full"><label class="f">Mô tả</label><input data-k="desc" value="' + esc(m.desc || "") + '"></div>' +
       '<div class="full"><label class="f">Biểu tượng (emoji) hoặc link ảnh https://…</label><input data-k="icon" value="' + esc(m.icon || "") + '"></div>' +
+      '<div class="full"><label class="f">Còn bán hôm nay (áp dụng ngay, không cần Lưu)</label><div class="soldrow">' +
+      Tables.variants(m).map(function (v) {
+        return '<label class="soldopt"><span class="tg sm"><input type="checkbox" data-sold="' + esc(v.key) + '"' + (v.off ? "" : " checked") + "><span></span></span> " + (v.size ? "Size " + esc(v.size) : "Còn bán") + "</label>";
+      }).join("") + "</div></div>" +
       '</div><div class="acts"><span style="color:var(--muted);font-size:12.5px">Bật/tắt “còn bán” ở công tắc phía trên</span>' +
       '<span style="display:flex;gap:6px"><button class="btn ghost sm" data-act="up" title="Lên">↑</button><button class="btn ghost sm" data-act="down" title="Xuống">↓</button>' +
       '<button class="btn danger sm" data-act="del">Xoá</button></span></div></div></div>';
@@ -377,6 +383,14 @@
     markDirty();
   });
   $("#menuList").addEventListener("change", function (e) {
+    var so = e.target.getAttribute && e.target.getAttribute("data-sold");
+    if (so) {
+      var off = !e.target.checked, cb = e.target; cb.disabled = true;
+      Store.setSoldOut(so, off, meEmail).then(function () { toast(off ? "Đã đánh dấu HẾT ✓" : "Đã bật bán lại ✓"); })
+        .catch(function (err) { cb.checked = !cb.checked; alert("Chưa cập nhật được: " + (err && err.message ? err.message : err)); })
+        .then(function () { cb.disabled = false; });
+      return;
+    }
     if (e.target.getAttribute && e.target.getAttribute("data-k") === "cat") renderMenu();   // cập nhật chip nhóm khi gõ xong
   });
   $("#menuList").addEventListener("click", function (e) {
@@ -573,7 +587,7 @@
   function renderManual() {
     var items = (saved ? saved.menu : []).filter(function (m) { return m.available !== false; });
     var total = 0;
-    var vlist = []; items.forEach(function (m) { Tables.variants(m).forEach(function (v) { vlist.push(v); total += (manual[v.key] || 0) * v.price; }); });
+    var vlist = []; items.forEach(function (m) { Tables.variants(m).forEach(function (v) { if (v.off) { delete manual[v.key]; return; } vlist.push(v); total += (manual[v.key] || 0) * v.price; }); });
     $("#manualBody").innerHTML = '<button class="x" data-m="close">✕</button><h2>Ghi đơn bán tại quán</h2>' +
       (vlist.length ? vlist.map(function (v) {
         var q = manual[v.key] || 0;

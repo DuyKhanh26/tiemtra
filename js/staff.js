@@ -13,7 +13,7 @@
   var startOfDay = function (ts) { var d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
   var me = null, shop = null, orders = [], cart = {}, tab = "orders";
-  var unsubShop = null, unsubOrders = null, unsubReq = null, reqs = [], reqSeen = null, loginMsg = "", checking = "", seen = null;
+  var unsubShop = null, unsubOrders = null, unsubSold = null, unsubReq = null, reqs = [], reqSeen = null, loginMsg = "", checking = "", seen = null;
   var baseTitle = "Nhân viên", soundOn = false, ac = null, wl = null;
   try { soundOn = localStorage.getItem("tra_sound") === "1"; } catch (e) {}
 
@@ -33,6 +33,7 @@
     if (unsubShop) { unsubShop(); unsubShop = null; }
     if (unsubOrders) { unsubOrders(); unsubOrders = null; }
     if (unsubReq) { unsubReq(); unsubReq = null; } reqs = []; reqSeen = null;
+    if (unsubSold) { unsubSold(); unsubSold = null; }
     me = null; shop = null; orders = []; cart = {}; seen = null;
   }
   function start(user) {
@@ -47,6 +48,7 @@
       detectNew(list); orders = list; renderAll();
     });
     startReq();
+    if (!unsubSold) unsubSold = Store.subscribeSoldOut(function (list) { Tables.setOff(list); pruneCart(); renderNew(); });
   }
   function startReq() {
     if (unsubReq) return;
@@ -203,13 +205,13 @@
   /* ---------- Đặt món tại quầy ---------- */
   function availItems() { return shop ? (shop.menu || []).filter(function (m) { return m.available !== false; }) : []; }
   function pruneCart() {
-    var ids = {}; availItems().forEach(function (m) { Tables.variants(m).forEach(function (v) { ids[v.key] = 1; }); });
+    var ids = {}; availItems().forEach(function (m) { Tables.variants(m).forEach(function (v) { if (!v.off) ids[v.key] = 1; }); });
     Object.keys(cart).forEach(function (k) { if (!ids[k]) delete cart[k]; });
   }
   function cartLines() {
     var out = [];
     availItems().forEach(function (m) {
-      Tables.variants(m).forEach(function (v) { if (cart[v.key] > 0) out.push({ id: v.id, key: v.key, size: v.size, name: v.name, price: v.price, qty: cart[v.key] }); });
+      Tables.variants(m).forEach(function (v) { if (cart[v.key] > 0 && !v.off) out.push({ id: v.id, key: v.key, size: v.size, name: v.name, price: v.price, qty: cart[v.key] }); });
     });
     return out;
   }
@@ -249,10 +251,11 @@
       if (heads && nCat !== "__best" && cat !== lastCat) { if (cat) html += '<div class="catline">' + esc(cat) + "</div>"; lastCat = cat; }
       Tables.variants(m).forEach(function (v) {
         var n = cart[v.key] || 0;
-        html += '<div class="stepper-row"><span>' + esc(m.name) + Tables.starHtml(m) + (v.size ? ' <span class="szb">' + esc(v.size) + "</span>" : "") +
-          '<br><small style="color:var(--muted)">' + money(v.price) + "</small></span><div class=\"qty\">" +
-          (n ? '<button class="minus" data-n="dec" data-id="' + esc(v.key) + '">−</button><span>' + n + "</span>" : "") +
-          '<button data-n="inc" data-id="' + esc(v.key) + '">+</button></div></div>';
+        html += '<div class="stepper-row' + (v.off ? " rowoff" : "") + '"><span>' + esc(m.name) + Tables.starHtml(m) + (v.size ? ' <span class="szb">' + esc(v.size) + "</span>" : "") +
+          '<br><small style="color:var(--muted)">' + money(v.price) + (v.off ? " · <b>HẾT</b>" : "") + "</small></span>" +
+          '<span class="soldctl"><label class="tg sm" title="Còn / hết món"><input type="checkbox" data-so="' + esc(v.key) + '"' + (v.off ? "" : " checked") + "><span></span></label>" +
+          (v.off ? "" : '<div class="qty">' + (n ? '<button class="minus" data-n="dec" data-id="' + esc(v.key) + '">−</button><span>' + n + "</span>" : "") +
+          '<button data-n="inc" data-id="' + esc(v.key) + '">+</button></div>') + "</span></div>";
       });
     });
     $("#newMenu").innerHTML = html || '<div style="color:var(--muted);padding:12px;text-align:center">' + (items.length ? "Không có món nào khớp." : "Chưa có món nào đang bán.") + "</div>";
@@ -276,6 +279,14 @@
     if (b.getAttribute("data-n") === "inc") cart[id] = Math.min(99, (cart[id] || 0) + 1);
     else { cart[id] = (cart[id] || 0) - 1; if (cart[id] <= 0) delete cart[id]; }
     renderNew();
+  });
+  $("#newMenu").addEventListener("change", function (e) {
+    var t = e.target; if (!t.getAttribute || !t.getAttribute("data-so")) return;
+    var key = t.getAttribute("data-so"), off = !t.checked;
+    t.disabled = true;
+    Store.setSoldOut(key, off, me.email).then(function () { toast(off ? "Đã đánh dấu HẾT ✓" : "Đã bật bán lại ✓"); })
+      .catch(function (err) { t.checked = !t.checked; alert("Chưa cập nhật được: " + (err && err.message ? err.message : err)); })
+      .then(function () { t.disabled = false; });
   });
   $("#nCreate").addEventListener("click", function () {
     var lines = cartLines(); if (!lines.length) return;

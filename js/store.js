@@ -106,6 +106,14 @@
       },
       deleteOrder: function (id) { return db.collection("orders").doc(id).delete(); },
       /* Mở bàn: bàn chỉ nhận món từ khách khi có tài liệu openTables/<số bàn> */
+      /* Hết món theo size: một tài liệu soldOut/main chứa danh sách khoá đang hết (khách xem được, nhân viên bật/tắt được) */
+      subscribeSoldOut: function (cb) {
+        return db.doc("soldOut/main").onSnapshot(function (s) { cb(s.exists && Array.isArray(s.data().off) ? s.data().off : []); }, function () { cb([]); });
+      },
+      setSoldOut: function (key, off, by) {
+        var op = off ? firebase.firestore.FieldValue.arrayUnion(key) : firebase.firestore.FieldValue.arrayRemove(key);
+        return db.doc("soldOut/main").set({ off: op, updatedAt: Date.now(), updatedBy: by || "" }, { merge: true });
+      },
       isTableOpen: function (t) { return db.doc("openTables/" + t).get().then(function (s) { return s.exists; }); },
       openTable: function (t, by) { return db.doc("openTables/" + t).set({ table: t, openedAt: Date.now(), openedBy: by || "" }); },
       closeTable: function (t) { return db.doc("openTables/" + t).delete(); },
@@ -203,6 +211,12 @@
       deleteOrder: function (id) {
         write("tra_orders", read("tra_orders", []).filter(function (o) { return o.id !== id; }));
         return Promise.resolve();
+      },
+      subscribeSoldOut: function (cb) { return sub("tra_soldout", function () { return read("tra_soldout", []); }, cb); },
+      setSoldOut: function (key, off) {
+        var l = read("tra_soldout", []).filter(function (k) { return k !== key; });
+        if (off) l.push(key);
+        write("tra_soldout", l); return Promise.resolve();
       },
       isTableOpen: function (t) { return Promise.resolve(!!read("tra_open", {})[t]); },
       openTable: function (t, by) { var m = read("tra_open", {}); m[t] = { table: t, openedAt: Date.now(), openedBy: by || "" }; write("tra_open", m); return Promise.resolve(); },
