@@ -61,9 +61,21 @@ Mở `js/firebase-config.js`, bỏ dấu `//` ở khối `window.FIREBASE_CONFIG
 - Khách gọi thêm món cùng số bàn (nhập lại đúng số bàn) thì các lần gọi gộp chung một hoá đơn. Mỗi lần gọi vẫn là một đơn riêng để pha chế bấm *Xong đơn*.
 - Tab **🪑 Bàn** (nhân viên và chủ quán đều có): xem các bàn đang mở, bấm **Tính tiền** → hoá đơn gộp → **Thu tiền mặt** hoặc **Chuyển khoản** (hiện QR đúng tổng tiền, nội dung `DH` + mã hoá đơn).
 - Mẹo: dán sẵn số bàn vào mã QR dán ở bàn bằng link dạng `https://.../index.html?ban=5` — khách quét là tự điền số bàn.
+- **Chuyển/gộp bàn:** khách đổi chỗ ngồi → ở tab Bàn bấm **↔ Chuyển bàn**, nhập số bàn mới. Nếu bàn mới đang có khách thì hai bàn gộp thành một hoá đơn. Có ghi lại ai chuyển và chuyển từ bàn nào. Nhớ dán lại `firestore.rules` vào Firebase.
 - Đơn gọi nhầm: chủ quán huỷ đơn đó ở tab Doanh thu (nhân viên không huỷ được), tiền bàn tự trừ.
 
 ## Thực đơn (chủ quán)
 - Thanh nhóm món phía trên: bấm nhóm để chỉ hiện món trong nhóm, có ô tìm theo tên (gõ không dấu cũng tìm được).
 - Mỗi món thu gọn thành 1 dòng; bật/tắt **còn bán** ngay trên dòng; bấm vào dòng để sửa tên, giá, nhóm…
 - **Đổi tên nhóm** áp dụng cho cả nhóm. Thêm món khi đang lọc nhóm thì món mới nằm sẵn trong nhóm đó. Nhớ bấm **Lưu thay đổi**.
+
+## Best-Seller ⭐ và size M / L
+- **Chủ quán → Thực đơn**: bấm ngôi sao ☆/★ cạnh tên món (sáng = Best-Seller). Món Best-Seller hiện ngôi sao sau tên và nằm trong nhóm riêng **⭐ Best-Seller** ở cả trang khách, trang nhân viên và trang chủ quán.
+- Mở món → nhập **Size M (đ)** và/hoặc **Size L (đ)**. Khách/nhân viên chọn theo size, đơn ghi rõ “Tên món (L)”. Để trống cả hai nếu món chỉ có một giá.
+- Cần bấm **Lưu thay đổi** để áp dụng. Không cần sửa firestore.rules cho phần này.
+
+## Mở bàn (chống khách nhập số bàn ảo)
+- Khách nhập số bàn **chưa được mở** → trang khách gửi "yêu cầu mở bàn" cho nhân viên/chủ quán (kèm thông báo ntfy nếu đã cài). Món khách chọn được giữ lại; khi được duyệt, đơn tự gửi về cho nhân viên; nếu bị từ chối, đơn bị huỷ (không được gửi).
+- Nhân viên/chủ quán duyệt ở tab **Bàn** (nút ✓ Mở bàn / Từ chối) hoặc tự mở bàn bằng ô "Mở bàn cho khách vừa vào".
+- Nhân viên tạo đơn tại quầy với số bàn thì bàn tự mở. Bàn tự đóng khi bấm "Tính tiền"; chuyển bàn thì bàn mới mở, bàn cũ đóng.
+- Quy tắc này được kiểm tra ở cả máy chủ (firestore.rules), nên khách không thể tự ý gửi đơn vào bàn chưa mở. Cần dán lại firestore.rules và Publish.

@@ -80,6 +80,9 @@
       <!-- Bàn đang mở -->
       <div class="panel hidden" id="panel-tables">
         <div style="color:var(--muted);font-size:13px;margin:4px 0 8px">Các bàn uống tại quán chưa tính tiền. Doanh thu của bàn chỉ được tính sau khi bấm “Tính tiền”.</div>
+        <div class="card" style="margin-bottom:10px"><label class="f" style="margin-top:0">Mở bàn cho khách vừa vào</label>
+          <div style="display:flex;gap:8px"><input id="openTblIn" maxlength="10" autocomplete="off" placeholder="Số bàn, ví dụ: 5" style="flex:1"><button class="btn" id="openTblBtn">Mở bàn</button></div>
+          <div class="hintsm">Khách nhập số bàn chưa mở sẽ gửi yêu cầu về đây. Bàn tự đóng khi bạn bấm “Tính tiền”.</div></div>
         <div id="tablesAdmin"></div>
       </div>
 
