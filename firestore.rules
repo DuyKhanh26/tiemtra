@@ -29,12 +29,37 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
+    // Bàn đang mở: khách chỉ kiểm tra được từng bàn (không liệt kê được); nhân viên/chủ quán mở & đóng bàn
+    match /openTables/{t} {
+      allow get: if true;
+      allow list, create, update, delete: if isOwner() || isStaff();
+    }
+
+    // Yêu cầu mở bàn do khách gửi, nhân viên/chủ quán duyệt
+    match /tableRequests/{rid} {
+      allow create: if request.resource.data.status == 'pending'
+        && request.resource.data.table is string
+        && request.resource.data.table.size() > 0
+        && request.resource.data.table.size() <= 12
+        && request.resource.data.keys().hasOnly(['table', 'status', 'createdAt', 'name'])
+        && (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() <= 40));
+      allow get: if true;   // mã yêu cầu ngẫu nhiên, khách chỉ xem được yêu cầu của chính mình
+      allow list: if isOwner() || isStaff();
+      allow update: if (isOwner() || isStaff())
+        && request.resource.data.status in ['approved', 'rejected']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledBy', 'handledAt']);
+      allow delete: if isOwner() || isStaff();
+    }
+
     // Đơn hàng
     match /orders/{id} {
       // Không cho khách tự đặt đơn "đã thanh toán"; số bàn là chữ ngắn
       function cleanExtras() {
         return (!('billStatus' in request.resource.data) || request.resource.data.billStatus == 'open')
-          && (!('table' in request.resource.data) || (request.resource.data.table is string && request.resource.data.table.size() <= 12));
+          && (!('table' in request.resource.data) || (request.resource.data.table is string && request.resource.data.table.size() <= 12))
+          // Khách chỉ được gọi món vào bàn đã được nhân viên/chủ quán MỞ (chống nhập số bàn ảo)
+          && (!('table' in request.resource.data) || isStaff()
+              || exists(/databases/$(database)/documents/openTables/$(request.resource.data.table)));
       }
       // Nhân viên: đổi đơn từ 'new' sang 'done'
       function staffDone() {
@@ -49,6 +74,16 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['billStatus', 'paidAt', 'paidBy', 'payMethod', 'billCode']);
       }
 
+      // Nhân viên: chuyển/gộp bàn (chỉ đổi số bàn của đơn chưa tính tiền, có ghi vết)
+      function staffMove() {
+        return resource.data.billStatus == 'open'
+          && request.resource.data.billStatus == 'open'
+          && request.resource.data.table is string
+          && request.resource.data.table.size() > 0
+          && request.resource.data.table.size() <= 12
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['table', 'movedFrom', 'movedAt', 'movedBy']);
+      }
+
       // Khách (không đăng nhập) và nhân viên được tạo đơn mới ở trạng thái 'new'
       allow create: if isOwner() || (
         request.resource.data.status == 'new'
@@ -59,8 +94,8 @@ service cloud.firestore {
       );
       // Chủ quán và nhân viên được xem đơn
       allow read: if isOwner() || isStaff();
-      // Nhân viên CHỈ được: xong đơn, hoặc tính tiền bàn (không sửa món/giá, không huỷ, không mở lại)
-      allow update: if isOwner() || (isStaff() && (staffDone() || staffPay()));
+      // Nhân viên CHỈ được: xong đơn, tính tiền bàn, hoặc chuyển bàn (không sửa món/giá, không huỷ, không mở lại)
+      allow update: if isOwner() || (isStaff() && (staffDone() || staffPay() || staffMove()));
       // Chỉ chủ quán được xoá đơn
       allow delete: if isOwner();
     }
