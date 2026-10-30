@@ -202,11 +202,13 @@
   /* ---------- Bàn đang mở ---------- */
   function renderTables() {
     var gs = Tables.group(orders);
-    $("#tablesAdmin").innerHTML = Tables.reqHtml(reqs) + Tables.cardsHtml(gs) + Tables.paidHtml(Tables.paidGroups(orders, startOfDay(Date.now())), staffName);
+    var q = $("#tblSearch").value, shown = Tables.filterTables(gs, q), paid = Tables.filterTables(Tables.paidGroups(orders, startOfDay(Date.now())), q);
+    $("#tablesAdmin").innerHTML = Tables.reqHtml(reqs) + (q.trim() && !shown.length && gs.length ? Tables.noHit : Tables.cardsHtml(shown)) + Tables.paidHtml(paid, staffName);
     var tb = $("#tblBadge"); tb.textContent = gs.length + reqs.length; tb.classList.toggle("hidden", gs.length + reqs.length === 0);
   }
   Tables.bindRequests($("#tablesAdmin"), function () { return reqs; }, function () { return meEmail; }, toast);
   Tables.bindManualOpen($("#openTblIn"), $("#openTblBtn"), function () { return meEmail; }, toast);
+  $("#tblSearch").addEventListener("input", renderTables);
   $("#tablesAdmin").addEventListener("click", function (e) {
     var b = e.target.closest("[data-bill-open],[data-move-open]"); if (!b) return;
     var tb0 = b.getAttribute("data-bill-open") || b.getAttribute("data-move-open"), gs = Tables.group(orders);
@@ -478,15 +480,18 @@
     var acts = "";
     if (o.status === "new") acts = '<button class="btn ok sm" data-act="done">✓ Hoàn thành</button><button class="btn danger sm" data-act="cancelled">Huỷ đơn</button>';
     else acts = '<button class="btn ghost sm" data-act="new">Mở lại</button>';
+    if (!o.table && o.source !== "shop" && o.status !== "cancelled")
+      acts = (o.orderPaid ? '<button class="btn ghost sm" data-act="unpaid">↩ Bỏ “đã thanh toán”</button>' : '<button class="btn sm" data-act="paid">💰 Đã thanh toán</button>') + acts;
     acts += '<button class="btn danger sm" data-act="del">🗑</button>';
     return '<div class="order ' + esc(o.status) + '" data-id="' + esc(o.id) + '">' +
-      '<div class="h"><span>#' + esc(o.code || "") + ' <span class="tagx ' + esc(o.status) + '">' + esc(ST[o.status] || o.status) + '</span><span class="tagx">' + (SRC[o.source] || "Tại quán") + "</span>" + (o.table ? '<span class="tagx tb">Bàn ' + esc(o.table) + "</span>" : "") + "</span><span>" + money(orderTotal(o)) + "</span></div>" +
+      '<div class="h"><span>#' + esc(o.code || "") + ' <span class="tagx ' + esc(o.status) + '">' + esc(ST[o.status] || o.status) + '</span><span class="tagx">' + (SRC[o.source] || "Tại quán") + "</span>" + (o.table ? '<span class="tagx tb">Bàn ' + esc(o.table) + "</span>" : "") + Tables.payTag(o) + "</span><span>" + money(orderTotal(o)) + "</span></div>" +
       '<div class="sub">' + fmtTime(o.createdAt) + " · " + esc(c.name || "") + (c.phone ? ' · <a href="tel:' + esc(String(c.phone).replace(/\D/g, "")) + '">' + esc(c.phone) + "</a>" : "") + "</div>" +
       (o.method ? '<div class="sub">' + esc(o.method) + (o.address ? " · " + esc(o.address) : "") + "</div>" : "") +
       "<ul>" + (o.items || []).map(function (it) {
         return "<li>" + esc(it.name) + " × " + esc(it.qty) + (it.sugar ? ' <span class="sub">(' + esc(it.sugar) + " đường, " + esc(it.ice) + ")</span>" : "") + "</li>";
       }).join("") + "</ul>" +
       (o.table ? '<div class="sub">' + (o.billStatus === "paid" ? "💰 Đã tính tiền (" + (o.payMethod === "cash" ? "tiền mặt" : "chuyển khoản") + ") · " + esc(staffName(o.paidBy)) : "⏳ Bàn chưa tính tiền") + (o.movedFrom ? " · chuyển từ Bàn " + esc(o.movedFrom) + " (" + esc(staffName(o.movedBy)) + ")" : "") + "</div>" : "") +
+      (o.orderPaid && !o.table ? '<div class="sub">💰 Đã thanh toán · xác nhận bởi ' + esc(staffName(o.orderPaidBy)) + "</div>" : "") +
       (o.createdBy || o.doneBy ? '<div class="sub">' + (o.createdBy ? "Nhập bởi " + esc(staffName(o.createdBy)) : "") + (o.createdBy && o.doneBy ? " · " : "") + (o.doneBy ? "Xong bởi " + esc(staffName(o.doneBy)) : "") + "</div>" : "") +
       (o.note ? '<div class="sub">📝 ' + esc(o.note) + "</div>" : "") +
       '<div class="acts">' + acts + "</div></div>";
@@ -509,6 +514,8 @@
     var id = b.closest(".order").getAttribute("data-id"), act = b.getAttribute("data-act");
     var p;
     if (act === "del") { if (!confirm("Xoá hẳn đơn này?")) return; p = Store.deleteOrder(id); }
+    else if (act === "paid") p = Store.updateOrder(id, { orderPaid: true, orderPaidAt: Date.now(), orderPaidBy: meEmail });
+    else if (act === "unpaid") p = Store.updateOrder(id, { orderPaid: false });
     else p = Store.updateOrder(id, { status: act, updatedAt: Date.now() });
     p.catch(function (err) { alert("Chưa cập nhật được: " + (err && err.message ? err.message : err)); });
   });

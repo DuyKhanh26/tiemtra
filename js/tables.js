@@ -104,6 +104,19 @@
     }).join("");
   }
 
+  /* Lọc bàn theo số gõ vào ("5", "bàn 5"): khớp một phần số bàn */
+  function filterTables(list, q) {
+    var k = norm(q); if (!k) return list;
+    return list.filter(function (g) { return String(g.table).indexOf(k) >= 0; });
+  }
+  var NOHIT = '<div style="text-align:center;color:var(--muted);padding:26px">Không thấy bàn nào khớp 🔍</div>';
+
+  /* Trạng thái thanh toán của đơn mang đi/giao (đơn tại bàn thì tính tiền theo bàn) */
+  function payTag(o) {
+    if (o.table || o.source === "shop" || o.status === "cancelled") return "";
+    return o.orderPaid ? ' <span class="tagx paid">✅ Đã thanh toán</span>' : ' <span class="tagx unpaid">⏳ Chưa thanh toán</span>';
+  }
+
   /* Yêu cầu mở bàn từ khách (đang chờ duyệt) */
   function reqHtml(list) {
     if (!list || !list.length) return "";
@@ -224,6 +237,6 @@
     };
   }
 
-  window.Tables = { norm: norm, label: label, group: group, cardsHtml: cardsHtml, paidGroups: paidGroups, paidHtml: paidHtml, createBillUI: createBillUI, reqHtml: reqHtml, bindRequests: bindRequests, bindManualOpen: bindManualOpen, orderTotal: orderTotal,
+  window.Tables = { norm: norm, label: label, group: group, cardsHtml: cardsHtml, paidGroups: paidGroups, paidHtml: paidHtml, createBillUI: createBillUI, payTag: payTag, filterTables: filterTables, reqHtml: reqHtml, noHit: NOHIT, bindRequests: bindRequests, bindManualOpen: bindManualOpen, orderTotal: orderTotal,
     sizesOf: sizesOf, variants: variants, findVariant: findVariant, priceText: priceText, starHtml: starHtml };
 })();

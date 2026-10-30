@@ -146,7 +146,7 @@
   function orderHtml(o, isPending) {
     var c = o.customer || {};
     return '<div class="order ' + (isPending ? "" : "done") + '" data-id="' + esc(o.id) + '">' +
-      '<div class="h"><span>#' + esc(o.code || "") + ' <span class="tagx">' + esc(SRC[o.source] || "Tại quán") + "</span>" + (o.table ? ' <span class="tagx tb">Bàn ' + esc(o.table) + "</span>" : "") + "</span><span>" + money(o.total) + "</span></div>" +
+      '<div class="h"><span>#' + esc(o.code || "") + ' <span class="tagx">' + esc(SRC[o.source] || "Tại quán") + "</span>" + (o.table ? ' <span class="tagx tb">Bàn ' + esc(o.table) + "</span>" : "") + Tables.payTag(o) + "</span><span>" + money(o.total) + "</span></div>" +
       '<div class="sub">' + fmtTime(o.createdAt) + (isPending ? ' · <span class="ago">' + ago(o.createdAt) + "</span>" : "") + " · " + esc(c.name || "") +
       (c.phone ? ' · <a href="tel:' + esc(String(c.phone).replace(/\D/g, "")) + '">' + esc(c.phone) + "</a>" : "") + "</div>" +
       (o.method ? '<div class="sub">' + esc(o.method) + (o.address ? " · " + esc(o.address) : "") + "</div>" : "") +
@@ -154,7 +154,7 @@
         return "<li><b>" + esc(it.name) + " × " + esc(it.qty) + "</b>" + (it.sugar ? ' <span class="sub">(' + esc(it.sugar) + " đường, " + esc(it.ice) + ")</span>" : "") + "</li>";
       }).join("") + "</ul>" +
       (o.note ? '<div class="sub">📝 ' + esc(o.note) + "</div>" : "") +
-      (isPending ? '<div class="acts"><button class="btn ok block" data-act="done">✓ Xong đơn</button></div>' : (o.doneBy ? '<div class="sub">Xong bởi ' + esc(String(o.doneBy).split("@")[0]) + "</div>" : "")) +
+      (isPending ? '<div class="acts">' + (!o.table && !o.orderPaid && o.source !== "shop" ? '<button class="btn block" data-act="paid">💰 Đã thanh toán</button>' : "") + '<button class="btn ok block" data-act="done">✓ Xong đơn</button></div>' : (o.doneBy ? '<div class="sub">Xong bởi ' + esc(String(o.doneBy).split("@")[0]) + "</div>" : "")) +
       "</div>";
   }
   function renderOrders() {
@@ -170,6 +170,16 @@
     document.title = pend.length ? "(" + pend.length + ") 🔔 " + baseTitle : baseTitle;
   }
   $("#pending").addEventListener("click", function (e) {
+    var pb = e.target.closest('[data-act="paid"]');
+    if (pb) {
+      var pc = pb.closest(".order"), pcode = ((pc.querySelector(".h span") || {}).textContent || "").trim().split(" ")[0];
+      if (!confirm("Xác nhận đơn " + pcode + " KHÁCH ĐÃ THANH TOÁN? Bạn không thể hoàn tác.")) return;
+      pb.disabled = true;
+      Store.updateOrder(pc.getAttribute("data-id"), { orderPaid: true, orderPaidAt: Date.now(), orderPaidBy: me.email })
+        .then(function () { toast("Đã ghi nhận thanh toán ✓"); })
+        .catch(function (err) { pb.disabled = false; alert("Chưa cập nhật được: " + (err && err.message ? err.message : err)); });
+      return;
+    }
     var b = e.target.closest('[data-act="done"]'); if (!b) return;
     var card = b.closest(".order"), id = card.getAttribute("data-id");
     var code = (card.querySelector(".h span") || {}).textContent || "";
@@ -293,10 +303,12 @@
   var billUI = null;
   function renderTablesList() {
     var gs = Tables.group(orders);
-    $("#tables").innerHTML = Tables.reqHtml(reqs) + Tables.cardsHtml(gs);
+    var q = $("#tblSearch").value, shown = Tables.filterTables(gs, q);
+    $("#tables").innerHTML = Tables.reqHtml(reqs) + (q.trim() && !shown.length && gs.length ? Tables.noHit : Tables.cardsHtml(shown));
     var tb = $("#tblBadge"); tb.textContent = gs.length + reqs.length; tb.classList.toggle("hidden", gs.length + reqs.length === 0);
     $("#nTables").innerHTML = gs.map(function (g) { return '<option value="' + esc(g.table) + '">'; }).join("");
   }
+  $("#tblSearch").addEventListener("input", renderTablesList);
   $("#tables").addEventListener("click", function (e) {
     var b = e.target.closest("[data-bill-open],[data-move-open]"); if (!b) return;
     var tb0 = b.getAttribute("data-bill-open") || b.getAttribute("data-move-open"), gs = Tables.group(orders);
