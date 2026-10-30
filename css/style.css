@@ -222,3 +222,15 @@ footer.foot { text-align: center; color: var(--muted); font-size: 13px; padding:
 .tg.sm { width: 46px; height: 26px; }
 .tg.sm span::before { width: 20px; height: 20px; left: 3px; top: 3px; }
 .tg.sm input:checked + span::before { transform: translateX(20px); }
+
+/* Best-Seller & size M/L */
+.star { color: #f5a300; font-size: 1.05em; text-shadow: 0 0 6px rgba(245,163,0,.45); }
+.szs { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.sz { display: flex; align-items: center; gap: 8px; }
+.szn { background: var(--soft); color: var(--primary-d); font-weight: 800; font-size: 12px; border-radius: 6px; padding: 2px 8px; min-width: 24px; text-align: center; }
+.szp { color: var(--primary-d); font-weight: 800; flex: 1; }
+.sz .qty button { width: 28px; height: 28px; font-size: 16px; }
+.szb { background: var(--soft); color: var(--primary-d); font-weight: 800; font-size: 11.5px; border-radius: 6px; padding: 1px 7px; }
+.starbtn { border: 0; background: transparent; font-size: 22px; line-height: 1; color: #b9c3c7; padding: 0 4px; cursor: pointer; }
+.starbtn.on { color: #f5a300; text-shadow: 0 0 6px rgba(245,163,0,.5); }
+.item.off .szs .qty { display: none; }
