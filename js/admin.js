@@ -34,7 +34,7 @@
   }
   function stopListening() {
     if (unsubShop) { unsubShop(); unsubShop = null; }
-    if (unsubOrders) { unsubOrders(); unsubOrders = null; }
+    if (unsubOrders) { unsubOrders(); unsubOrders = null; } ordersSince = null;
     if (unsubStaff) { unsubStaff(); unsubStaff = null; }
     if (unsubOwners) { unsubOwners(); unsubOwners = null; } ownerList = [];
     if (unsubSold) { unsubSold(); unsubSold = null; }
@@ -105,6 +105,22 @@
   setInterval(function () {
     if (soundOn && orders.some(function (o) { return o.status === "new"; })) beep();
   }, 20000);
+  /* Chỉ tải đơn từ mốc "since" trở đi. Chọn khoảng dài hơn (30 ngày/Tất cả) thì tải thêm khi cần. */
+  var ordersSince = null;
+  function listenOrders(since, max) {
+    if (unsubOrders) { unsubOrders(); unsubOrders = null; }
+    ordersSince = since; seen = null;
+    unsubOrders = Store.subscribeOrdersSince(since, function (list) { detectNew(list); orders = list; renderRevenue(); renderTables(); }, max);
+  }
+  function needOrdersFor(r) {
+    if (!meEmail) return;
+    var now = startOfDay(Date.now());
+    var since = r === "30" ? now - 29 * 86400000 : r === "all" ? 0 : r === "7" ? now - 6 * 86400000 : now - 4 * 3600000;
+    // chỉ tải thêm khi cần xem khoảng dài hơn; quay lại "Hôm nay" thì thu gọn để tiết kiệm lượt đọc
+    if (ordersSince === null || since === ordersSince) return;
+    if (since < ordersSince) listenOrders(since, r === "all" ? 20000 : r === "30" ? 10000 : 3000);
+    else if (r === "today") listenOrders(since, 1500);
+  }
   function showApp(user) {
     $("#loginView").classList.add("hidden");
     $("#appView").classList.remove("hidden");
@@ -117,7 +133,7 @@
       });
     }
     if (!unsubOrders) {
-      unsubOrders = Store.subscribeOrders(function (list) { detectNew(list); orders = list; renderRevenue(); renderTables(); });
+      listenOrders(startOfDay(Date.now()) - 4 * 3600000, 1500);   // mặc định chỉ đơn HÔM NAY (+ 4 giờ cuối hôm qua) → tiết kiệm lượt đọc
     }
     if (!unsubSold) unsubSold = Store.subscribeSoldOut(function (list) { Tables.setOff(list); if (draft) renderMenu(); if ($("#manualDlg").open) renderManual(); });
     if (!unsubReq) {
@@ -495,6 +511,9 @@
 
     // Biểu đồ 7 ngày
     var days = [], today = startOfDay(Date.now());
+    var barsFull = ordersSince !== null && ordersSince <= today - 6 * 86400000;
+    $("#barsCard").classList.toggle("hidden", !barsFull);
+    $("#barsHint").classList.toggle("hidden", barsFull);
     for (var i = 6; i >= 0; i--) { var t = today - i * 86400000; days.push({ t: t, v: 0 }); }
     orders.forEach(function (o) {
       if (!counted(o)) return;
@@ -551,6 +570,7 @@
   $("#rangeChips").addEventListener("click", function (e) {
     var b = e.target.closest("[data-range]"); if (!b) return;
     range = b.getAttribute("data-range");
+    needOrdersFor(range);
     $$("#rangeChips .chip").forEach(function (c) { c.classList.toggle("on", c === b); });
     renderRevenue();
   });

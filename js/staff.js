@@ -44,7 +44,7 @@
       shop = s; baseTitle = "Nhân viên – " + s.name; $("#barName").textContent = s.name;
       pruneCart(); renderAll();
     });
-    if (!unsubOrders) unsubOrders = Store.subscribeOrdersSince(startOfDay(Date.now()) - 86400000, function (list) {
+    if (!unsubOrders) unsubOrders = Store.subscribeOrdersSince(startOfDay(Date.now()) - 4 * 3600000, function (list) {
       detectNew(list); orders = list; renderAll();
     });
     startReq();

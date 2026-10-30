@@ -53,8 +53,8 @@
         return db.doc("shop/main").set(data);
       },
       addOrder: function (o) { return db.collection("orders").add(o); },
-      subscribeOrdersSince: function (since, cb) {
-        return db.collection("orders").where("createdAt", ">=", since).orderBy("createdAt", "desc").limit(500).onSnapshot(
+      subscribeOrdersSince: function (since, cb, max) {
+        return db.collection("orders").where("createdAt", ">=", since).orderBy("createdAt", "desc").limit(max || 1000).onSnapshot(
           function (sn) { cb(sn.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; })); },
           function (e) { console.error(e); }
         );
@@ -164,7 +164,7 @@
         x.id = "o" + Date.now() + Math.random().toString(36).slice(2, 6);
         list.unshift(x); write("tra_orders", list); return Promise.resolve();
       },
-      subscribeOrdersSince: function (since, cb) {
+      subscribeOrdersSince: function (since, cb, max) {
         return sub("tra_orders", function () { return read("tra_orders", []).filter(function (o) { return (o.createdAt || 0) >= since; }).sort(function (a, b) { return b.createdAt - a.createdAt; }); }, cb);
       },
       subscribeStaff: function (cb) { return sub("tra_staff", function () { return read("tra_staff", []); }, cb); },
