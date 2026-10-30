@@ -14,8 +14,14 @@
 
   var OWNER = Store.OWNER;
   var draft = null, saved = null, dirty = false;
+  var FIELDS = { name: "#fName", tagline: "#fTagline", notice: "#fNotice", address: "#fAddress", phone: "#fPhone", hours: "#fHours", closedNote: "#fClosedNote" };
+  var billUI = null;
+  var menuCat = "__all", menuQ = "", openRows = {};
+  var manual = {};
+  var ST = { new: "Chờ xử lý", done: "Hoàn thành", cancelled: "Đã huỷ" };
+  var SRC = { web: "Web", shop: "Tại quán", staff: "Nhân viên" };
   var orders = [], range = "today", stFilter = "all", tab = "info";
-  var meEmail = "", unsubShop = null, unsubOrders = null, unsubStaff = null, staffList = [], loginMsg = "";
+  var meEmail = "", unsubShop = null, unsubOrders = null, unsubStaff = null, unsubReq = null, reqs = [], reqSeen = null, staffList = [], loginMsg = "";
 
   /* ---------- Đăng nhập ---------- */
   function showLogin() {
@@ -29,6 +35,7 @@
     if (unsubShop) { unsubShop(); unsubShop = null; }
     if (unsubOrders) { unsubOrders(); unsubOrders = null; }
     if (unsubStaff) { unsubStaff(); unsubStaff = null; }
+    if (unsubReq) { unsubReq(); unsubReq = null; } reqs = []; reqSeen = null;
     draft = saved = null; dirty = false; orders = []; seen = null;
   }
 
@@ -109,6 +116,16 @@
     if (!unsubOrders) {
       unsubOrders = Store.subscribeOrders(function (list) { detectNew(list); orders = list; renderRevenue(); renderTables(); });
     }
+    if (!unsubReq) {
+      unsubReq = Store.subscribeRequests(function (list) {
+        if (reqSeen === null) reqSeen = {};
+        var fresh = list.filter(function (r) { return !reqSeen[r.id]; });
+        list.forEach(function (r) { reqSeen[r.id] = 1; });
+        reqs = list;
+        if (fresh.length) { beep(); toast("🪑 Khách xin mở " + Tables.label(fresh[0].table)); }
+        renderTables();
+      });
+    }
     if (!unsubStaff) {
       unsubStaff = Store.subscribeStaff(function (list) { staffList = list; renderStaff(); renderRevenue(); renderTables(); });
     }
@@ -168,7 +185,6 @@
   }
 
   /* ---------- Form thông tin ---------- */
-  var FIELDS = { name: "#fName", tagline: "#fTagline", notice: "#fNotice", address: "#fAddress", phone: "#fPhone", hours: "#fHours", closedNote: "#fClosedNote" };
   function renderInfo() {
     Object.keys(FIELDS).forEach(function (k) { $(FIELDS[k]).value = draft[k] || ""; });
     $("#fOpen").checked = draft.isOpen !== false;
@@ -184,18 +200,20 @@
 
 
   /* ---------- Bàn đang mở ---------- */
-  var billUI = null;
   function renderTables() {
     var gs = Tables.group(orders);
-    $("#tablesAdmin").innerHTML = Tables.cardsHtml(gs) + Tables.paidHtml(Tables.paidGroups(orders, startOfDay(Date.now())), staffName);
-    var tb = $("#tblBadge"); tb.textContent = gs.length; tb.classList.toggle("hidden", gs.length === 0);
+    $("#tablesAdmin").innerHTML = Tables.reqHtml(reqs) + Tables.cardsHtml(gs) + Tables.paidHtml(Tables.paidGroups(orders, startOfDay(Date.now())), staffName);
+    var tb = $("#tblBadge"); tb.textContent = gs.length + reqs.length; tb.classList.toggle("hidden", gs.length + reqs.length === 0);
   }
+  Tables.bindRequests($("#tablesAdmin"), function () { return reqs; }, function () { return meEmail; }, toast);
+  Tables.bindManualOpen($("#openTblIn"), $("#openTblBtn"), function () { return meEmail; }, toast);
   $("#tablesAdmin").addEventListener("click", function (e) {
-    var b = e.target.closest("[data-bill-open]"); if (!b) return;
-    var g = Tables.group(orders).filter(function (x) { return x.table === b.getAttribute("data-bill-open"); })[0];
+    var b = e.target.closest("[data-bill-open],[data-move-open]"); if (!b) return;
+    var tb0 = b.getAttribute("data-bill-open") || b.getAttribute("data-move-open"), gs = Tables.group(orders);
+    var g = gs.filter(function (x) { return x.table === tb0; })[0];
     if (!g) return;
     if (!billUI) billUI = Tables.createBillUI({ dlg: $("#billDlg"), body: $("#billBody"), email: function () { return meEmail; }, toast: toast });
-    billUI.open(g);
+    billUI.open(g, gs, b.hasAttribute("data-move-open") ? "move" : "bill");
   });
 
   /* ---------- Nhân viên ---------- */
@@ -234,13 +252,13 @@
   });
 
   /* ---------- Thực đơn: lọc theo nhóm, tìm kiếm, thu gọn từng món ---------- */
-  var menuCat = "__all", menuQ = "", openRows = {};
   function fold(s) { return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").toLowerCase(); }
   function catOf(m) { return (m.cat || "").trim(); }
   function iconTxt(ic) { ic = String(ic || "🧋"); return /^https?:/i.test(ic) ? "🖼️" : ic; }
   function matches(m) {
     var c = catOf(m);
-    if (menuCat === "__none") { if (c) return false; }
+    if (menuCat === "__best") { if (!m.best) return false; }
+    else if (menuCat === "__none") { if (c) return false; }
     else if (menuCat !== "__all" && c !== menuCat) return false;
     if (menuQ && fold(m.name + " " + (m.desc || "")).indexOf(fold(menuQ)) < 0) return false;
     return true;
@@ -248,13 +266,16 @@
   function rowHtml(m, i) {
     return '<div class="mrow' + (m.available === false ? " off" : "") + (openRows[m.id] ? " open" : "") + '" data-i="' + i + '" data-id="' + esc(m.id) + '">' +
       '<div class="mh"><span class="mico">' + esc(iconTxt(m.icon)) + '</span>' +
-      '<span class="mt"><b class="mh-name">' + esc(m.name || "(chưa đặt tên)") + '</b><small><span class="mh-price">' + money(m.price) + '</span> · <span class="mh-cat">' + esc(catOf(m) || "Chưa phân nhóm") + "</span></small></span>" +
+      '<span class="mt"><b class="mh-name">' + esc(m.name || "(chưa đặt tên)") + '</b><button type="button" class="starbtn' + (m.best ? " on" : "") + '" data-star="1" title="Best-Seller">' + (m.best ? "★" : "☆") + '</button><small><span class="mh-price">' + Tables.priceText(m) + '</span> · <span class="mh-cat">' + esc(catOf(m) || "Chưa phân nhóm") + "</span></small></span>" +
       '<label class="tg sm" title="Còn bán / Tạm hết"><input type="checkbox" data-k="available"' + (m.available !== false ? " checked" : "") + "><span></span></label>" +
       '<span class="chev">▾</span></div>' +
       '<div class="mb"><div class="grid2">' +
       '<div class="full"><label class="f" style="margin-top:0">Tên món</label><input data-k="name" value="' + esc(m.name) + '"></div>' +
-      '<div><label class="f">Giá (đ)</label><input data-k="price" type="number" min="0" step="1000" inputmode="numeric" value="' + esc(m.price) + '"></div>' +
+      '<div><label class="f">Giá (đ) · khi không chia size</label><input data-k="price" type="number" min="0" step="1000" inputmode="numeric" value="' + esc(m.price) + '"></div>' +
       '<div><label class="f">Nhóm món</label><input data-k="cat" list="catList" value="' + esc(m.cat || "") + '" placeholder="Trà trái cây…"></div>' +
+      '<div><label class="f">Size M (đ)</label><input data-k="priceM" type="number" min="0" step="1000" inputmode="numeric" value="' + esc(m.priceM || "") + '" placeholder="để trống nếu không có"></div>' +
+      '<div><label class="f">Size L (đ)</label><input data-k="priceL" type="number" min="0" step="1000" inputmode="numeric" value="' + esc(m.priceL || "") + '" placeholder="để trống nếu không có"></div>' +
+      '<div class="full hintsm" style="margin:0">Nhập giá size M và/hoặc L thì khách chọn theo size (giá ở ô “Giá” sẽ không dùng). Để trống cả hai nếu món chỉ có một giá.</div>' +
       '<div class="full"><label class="f">Mô tả</label><input data-k="desc" value="' + esc(m.desc || "") + '"></div>' +
       '<div class="full"><label class="f">Biểu tượng (emoji) hoặc link ảnh https://…</label><input data-k="icon" value="' + esc(m.icon || "") + '"></div>' +
       '</div><div class="acts"><span style="color:var(--muted);font-size:12.5px">Bật/tắt “còn bán” ở công tắc phía trên</span>' +
@@ -264,18 +285,21 @@
   function renderMenu(focusId) {
     var menu = draft.menu, cats = [], counts = {}, none = 0;
     menu.forEach(function (m) { var c = catOf(m); if (!c) none++; else { if (cats.indexOf(c) < 0) cats.push(c); counts[c] = (counts[c] || 0) + 1; } });
-    if (menuCat !== "__all" && menuCat !== "__none" && cats.indexOf(menuCat) < 0) menuCat = "__all";
+    if (menuCat === "__best" && !menu.some(function (m) { return m.best; })) menuCat = "__all";
+    if (menuCat !== "__all" && menuCat !== "__none" && menuCat !== "__best" && cats.indexOf(menuCat) < 0) menuCat = "__all";
     if (menuCat === "__none" && !none) menuCat = "__all";
     $("#catList").innerHTML = cats.map(function (c) { return '<option value="' + esc(c) + '">'; }).join("");
     var chips = [{ k: "__all", t: "Tất cả (" + menu.length + ")" }];
     cats.forEach(function (c) { chips.push({ k: c, t: c + " (" + counts[c] + ")" }); });
+    var bestN = menu.filter(function (m) { return m.best; }).length;
+    if (bestN) chips.splice(1, 0, { k: "__best", t: "⭐ Best-Seller (" + bestN + ")" });
     if (none && cats.length) chips.push({ k: "__none", t: "Chưa phân nhóm (" + none + ")" });
     $("#menuCats").innerHTML = chips.length > 1 ? chips.map(function (c) {
       return '<button class="cat' + (c.k === menuCat ? " on" : "") + '" data-mcat="' + esc(c.k) + '">' + esc(c.t) + "</button>";
     }).join("") : "";
     var vis = []; menu.forEach(function (m, i) { if (matches(m)) vis.push(i); });
     $("#menuInfo").textContent = menu.length ? "Hiển thị " + vis.length + "/" + menu.length + " món" : "";
-    $("#catRename").classList.toggle("hidden", menuCat === "__all" || menuCat === "__none");
+    $("#catRename").classList.toggle("hidden", menuCat === "__all" || menuCat === "__none" || menuCat === "__best");
     if (!menu.length) { $("#menuList").innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Chưa có món nào. Bấm “Thêm món mới” nhé.</div>'; return; }
     if (!vis.length) { $("#menuList").innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Không có món nào khớp.</div>'; return; }
     $("#menuList").innerHTML = vis.map(function (i) { return rowHtml(menu[i], i); }).join("");
@@ -290,7 +314,7 @@
     menuCat = b.getAttribute("data-mcat"); renderMenu();
   });
   $("#catRename").addEventListener("click", function () {
-    var old = menuCat; if (old === "__all" || old === "__none") return;
+    var old = menuCat; if (old === "__all" || old === "__none" || old === "__best") return;
     var nn = prompt("Tên mới cho nhóm “" + old + "”:", old);
     if (nn === null) return; nn = nn.trim();
     if (!nn || nn === old) return;
@@ -302,6 +326,10 @@
     var row = e.target.closest(".mrow"), i = +row.getAttribute("data-i");
     var m = draft.menu[i]; if (!m) return;
     if (k === "available") { m.available = e.target.checked; row.classList.toggle("off", !m.available); }
+    else if (k === "priceM" || k === "priceL") {
+      m[k] = e.target.value === "" ? 0 : Math.max(0, Number(e.target.value));
+      row.querySelector(".mh-price").textContent = Tables.priceText(m);
+    }
     else if (k === "price") { m.price = e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)); row.querySelector(".mh-price").textContent = money(m.price); }
     else {
       m[k] = e.target.value;
@@ -317,6 +345,7 @@
   $("#menuList").addEventListener("click", function (e) {
     var row = e.target.closest(".mrow"); if (!row) return;
     var i = +row.getAttribute("data-i"), m = draft.menu, b = e.target.closest("[data-act]");
+    if (e.target.closest("[data-star]")) { m[i].best = !m[i].best; markDirty(); renderMenu(); return; }
     if (!b) {
       if (e.target.closest(".mh") && !e.target.closest(".tg")) {
         var id = row.getAttribute("data-id"); openRows[id] = !openRows[id]; row.classList.toggle("open", !!openRows[id]);
@@ -334,8 +363,8 @@
     markDirty(); renderMenu();
   });
   $("#addItem").addEventListener("click", function () {
-    var c = (menuCat !== "__all" && menuCat !== "__none") ? menuCat : "";
-    var m = { id: uid(), name: "Món mới", price: 35000, cat: c, icon: "🧋", desc: "", available: true };
+    var c = (menuCat !== "__all" && menuCat !== "__none" && menuCat !== "__best") ? menuCat : "";
+    var m = { id: uid(), name: "Món mới", price: 35000, cat: c, icon: "🧋", desc: "", available: true, best: menuCat === "__best" };
     draft.menu.push(m); openRows[m.id] = true; menuQ = ""; $("#menuSearch").value = "";
     markDirty(); renderMenu(m.id);
   });
@@ -352,6 +381,9 @@
       m.name = (m.name || "").trim();
       if (!m.name) { alert("Món số " + (i + 1) + " chưa có tên."); return; }
       m.price = Number(m.price) || 0;
+      m.priceM = Math.max(0, Number(m.priceM) || 0); m.priceL = Math.max(0, Number(m.priceL) || 0);
+      if (m.priceM || m.priceL) m.price = Math.min.apply(null, [m.priceM, m.priceL].filter(Boolean));
+      m.best = !!m.best;
       m.cat = (m.cat || "").trim();
       m.available = m.available !== false;
       if (!m.id) m.id = uid();
@@ -441,8 +473,6 @@
       '<div style="text-align:center;color:var(--muted);padding:24px">Không có đơn nào.</div>';
   }
 
-  var ST = { new: "Chờ xử lý", done: "Hoàn thành", cancelled: "Đã huỷ" };
-  var SRC = { web: "Web", shop: "Tại quán", staff: "Nhân viên" };
   function orderHtml(o) {
     var c = o.customer || {};
     var acts = "";
@@ -456,7 +486,7 @@
       "<ul>" + (o.items || []).map(function (it) {
         return "<li>" + esc(it.name) + " × " + esc(it.qty) + (it.sugar ? ' <span class="sub">(' + esc(it.sugar) + " đường, " + esc(it.ice) + ")</span>" : "") + "</li>";
       }).join("") + "</ul>" +
-      (o.table ? '<div class="sub">' + (o.billStatus === "paid" ? "💰 Đã tính tiền (" + (o.payMethod === "cash" ? "tiền mặt" : "chuyển khoản") + ") · " + esc(staffName(o.paidBy)) : "⏳ Bàn chưa tính tiền") + "</div>" : "") +
+      (o.table ? '<div class="sub">' + (o.billStatus === "paid" ? "💰 Đã tính tiền (" + (o.payMethod === "cash" ? "tiền mặt" : "chuyển khoản") + ") · " + esc(staffName(o.paidBy)) : "⏳ Bàn chưa tính tiền") + (o.movedFrom ? " · chuyển từ Bàn " + esc(o.movedFrom) + " (" + esc(staffName(o.movedBy)) + ")" : "") + "</div>" : "") +
       (o.createdBy || o.doneBy ? '<div class="sub">' + (o.createdBy ? "Nhập bởi " + esc(staffName(o.createdBy)) : "") + (o.createdBy && o.doneBy ? " · " : "") + (o.doneBy ? "Xong bởi " + esc(staffName(o.doneBy)) : "") + "</div>" : "") +
       (o.note ? '<div class="sub">📝 ' + esc(o.note) + "</div>" : "") +
       '<div class="acts">' + acts + "</div></div>";
@@ -484,7 +514,6 @@
   });
 
   /* ---------- Ghi đơn tại quán ---------- */
-  var manual = {};
   $("#manualBtn").addEventListener("click", function () {
     manual = {};
     renderManual();
@@ -493,13 +522,13 @@
   function renderManual() {
     var items = (saved ? saved.menu : []).filter(function (m) { return m.available !== false; });
     var total = 0;
-    items.forEach(function (m) { total += (manual[m.id] || 0) * (Number(m.price) || 0); });
+    var vlist = []; items.forEach(function (m) { Tables.variants(m).forEach(function (v) { vlist.push(v); total += (manual[v.key] || 0) * v.price; }); });
     $("#manualBody").innerHTML = '<button class="x" data-m="close">✕</button><h2>Ghi đơn bán tại quán</h2>' +
-      (items.length ? items.map(function (m) {
-        var q = manual[m.id] || 0;
-        return '<div class="stepper-row"><span>' + esc(m.name) + '<br><small style="color:var(--muted)">' + money(m.price) + '</small></span><div class="qty">' +
-          (q ? '<button class="minus" data-m="dec" data-id="' + esc(m.id) + '">−</button><span>' + q + "</span>" : "") +
-          '<button data-m="inc" data-id="' + esc(m.id) + '">+</button></div></div>';
+      (vlist.length ? vlist.map(function (v) {
+        var q = manual[v.key] || 0;
+        return '<div class="stepper-row"><span>' + esc(v.item.name) + Tables.starHtml(v.item) + (v.size ? ' <span class="szb">' + esc(v.size) + "</span>" : "") + '<br><small style="color:var(--muted)">' + money(v.price) + '</small></span><div class="qty">' +
+          (q ? '<button class="minus" data-m="dec" data-id="' + esc(v.key) + '">−</button><span>' + q + "</span>" : "") +
+          '<button data-m="inc" data-id="' + esc(v.key) + '">+</button></div></div>';
       }).join("") : "<p>Chưa có món nào đang bán.</p>") +
       '<div class="total"><span>Tổng</span><span>' + money(total) + '</span></div><button class="btn block" data-m="save"' + (total ? "" : " disabled") + ">Ghi nhận đơn (đã thanh toán)</button>";
   }
@@ -511,9 +540,10 @@
     if (a === "inc") manual[id] = Math.min(99, (manual[id] || 0) + 1);
     else if (a === "dec") { manual[id] = (manual[id] || 0) - 1; if (manual[id] <= 0) delete manual[id]; }
     else if (a === "save") {
-      var items = saved.menu.filter(function (m) { return manual[m.id]; }).map(function (m) {
-        return { id: m.id, name: m.name, price: Number(m.price) || 0, qty: manual[m.id] };
-      });
+      var items = [];
+      saved.menu.forEach(function (m) { Tables.variants(m).forEach(function (v) {
+        if (manual[v.key]) { var it = { id: v.id, name: v.name, price: v.price, qty: manual[v.key] }; if (v.size) it.size = v.size; items.push(it); }
+      }); });
       if (!items.length) return;
       var dlg = this;
       Store.addOrder({

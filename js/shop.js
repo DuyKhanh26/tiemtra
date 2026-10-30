@@ -10,6 +10,7 @@
   };
   var digits = function (s) { return String(s || "").replace(/\D/g, ""); };
 
+  var BEST = "Best-Seller";
   var SUGAR = ["100%", "70%", "50%", "30%", "0%"];
   var ICE = ["Đá bình thường", "Ít đá", "Đá riêng", "Không đá"];
 
@@ -30,17 +31,17 @@
 
   /* Đồng bộ giỏ hàng với thực đơn mới nhất (đổi giá, hết món, xoá món…) */
   function syncCart() {
-    Object.keys(cart).forEach(function (id) {
-      var it = itemById(id);
-      if (!it || it.available === false || !(cart[id].qty > 0)) delete cart[id];
+    Object.keys(cart).forEach(function (key) {
+      var v = Tables.findVariant(shop.menu, key);
+      if (!v || v.item.available === false || !(cart[key].qty > 0)) delete cart[key];
     });
     saveCart();
   }
   function cartLines() {
-    return Object.keys(cart).map(function (id) {
-      var it = itemById(id), c = cart[id];
-      return { id: id, name: it.name, price: Number(it.price) || 0, qty: c.qty, sugar: c.sugar, ice: c.ice };
-    });
+    return Object.keys(cart).map(function (key) {
+      var v = Tables.findVariant(shop.menu, key), c = cart[key];
+      return v ? { key: key, id: v.id, size: v.size, name: v.name, price: v.price, qty: c.qty, sugar: c.sugar, ice: c.ice } : null;
+    }).filter(Boolean);
   }
   function cartTotals() {
     var q = 0, t = 0;
@@ -79,28 +80,45 @@
   function renderMenu() {
     var menu = shop.menu || [];
     var cats = ["Tất cả"];
+    var hasBest = menu.some(function (m) { return m.best; });
+    if (hasBest) cats.push(BEST);
     menu.forEach(function (m) { var c = (m.cat || "").trim(); if (c && cats.indexOf(c) < 0) cats.push(c); });
     if (cats.indexOf(activeCat) < 0) activeCat = "Tất cả";
-    $("#cats").innerHTML = cats.length > 2 ? cats.map(function (c) {
-      return '<button class="cat' + (c === activeCat ? " on" : "") + '" data-cat="' + esc(c) + '">' + esc(c) + "</button>";
+    $("#cats").innerHTML = cats.length > 2 || hasBest ? cats.map(function (c) {
+      return '<button class="cat' + (c === activeCat ? " on" : "") + '" data-cat="' + esc(c) + '">' + (c === BEST ? "⭐ " : "") + esc(c) + "</button>";
     }).join("") : "";
 
-    var list = menu.filter(function (m) { return activeCat === "Tất cả" || (m.cat || "").trim() === activeCat; });
+    var list = menu.filter(function (m) {
+      if (activeCat === "Tất cả") return true;
+      if (activeCat === BEST) return !!m.best;
+      return (m.cat || "").trim() === activeCat;
+    });
     if (!list.length) { $("#menu").innerHTML = '<div class="empty">Chưa có món nào 🍃</div>'; return; }
     $("#menu").innerHTML = list.map(function (m) {
       var off = m.available === false;
-      var q = cart[m.id] ? cart[m.id].qty : 0;
-      var ctl;
+      var vs = Tables.variants(m), sized = vs[0].size !== "";
+      function ctlFor(v) {
+        var q = cart[v.key] ? cart[v.key].qty : 0;
+        return '<div class="qty">' +
+          (q > 0 ? '<button class="minus" data-act="dec" data-id="' + esc(v.key) + '" aria-label="Bớt">−</button><span>' + q + "</span>" : "") +
+          '<button data-act="inc" data-id="' + esc(v.key) + '" aria-label="Thêm">+</button></div>';
+      }
+      var ctl = "", prices;
       if (off) ctl = '<span class="tag-off">Tạm hết</span>';
-      else if (!isOpen()) ctl = "";
-      else ctl = '<div class="qty">' +
-        (q > 0 ? '<button class="minus" data-act="dec" data-id="' + esc(m.id) + '" aria-label="Bớt">−</button><span>' + q + "</span>" : "") +
-        '<button data-act="inc" data-id="' + esc(m.id) + '" aria-label="Thêm">+</button></div>';
+      if (sized) {
+        prices = '<div class="szs">' + vs.map(function (v) {
+          return '<div class="sz"><span class="szn">' + esc(v.size) + '</span><span class="szp">' + money(v.price) + "</span>" + (off || !isOpen() ? "" : ctlFor(v)) + "</div>";
+        }).join("") + "</div>";
+        if (!off) ctl = "";
+      } else {
+        prices = '<div class="pr">' + money(m.price) + "</div>";
+        if (!off && isOpen()) ctl = ctlFor(vs[0]);
+      }
       return '<article class="item' + (off ? " off" : "") + '">' +
         '<div class="ico">' + iconHtml(m.icon) + "</div>" +
-        '<div class="meta"><div class="nm">' + esc(m.name) + "</div>" +
+        '<div class="meta"><div class="nm">' + esc(m.name) + Tables.starHtml(m) + "</div>" +
         (m.desc ? '<div class="ds">' + esc(m.desc) + "</div>" : "") +
-        '<div class="pr">' + money(m.price) + "</div></div>" + ctl + "</article>";
+        prices + "</div>" + ctl + "</article>";
     }).join("");
   }
 
@@ -136,7 +154,7 @@
     body.innerHTML =
       '<button class="x" data-act="close">✕</button><h2>Đơn của bạn</h2>' +
       lines.map(function (l) {
-        return '<div class="line" data-id="' + esc(l.id) + '"><div class="t"><span>' + esc(l.name) + " × " + l.qty + "</span><span>" + money(l.price * l.qty) + "</span></div>" +
+        return '<div class="line" data-id="' + esc(l.key) + '"><div class="t"><span>' + esc(l.name) + " × " + l.qty + "</span><span>" + money(l.price * l.qty) + "</span></div>" +
           '<div class="opts"><select data-f="sugar" aria-label="Đường">' + SUGAR.map(function (s) { return "<option" + (s === l.sugar ? " selected" : "") + ">" + s + "</option>"; }).join("") + "</select>" +
           '<select data-f="ice" aria-label="Đá">' + opt(ICE, l.ice) + "</select></div></div>";
       }).join("") +
@@ -205,12 +223,13 @@
       code: code, source: "web", status: "new", createdAt: Date.now(),
       customer: { name: name, phone: phone }, method: method, address: method.indexOf("Giao") === 0 ? addr : "",
       note: note, total: t.total,
-      items: lines.map(function (l) { return { id: l.id, name: l.name, price: l.price, qty: l.qty, sugar: l.sugar, ice: l.ice }; })
+      items: lines.map(function (l) { var it = { id: l.id, name: l.name, price: l.price, qty: l.qty, sugar: l.sugar, ice: l.ice }; if (l.size) it.size = l.size; return it; })
     };
     if (dine && tbl) { order.table = tbl; order.billStatus = "open"; }
     checkoutInfo = { name: name, phone: phone, method: method, address: addr, table: tbl, tableAt: tbl ? Date.now() : 0 }; saveInfo();
     var btn = document.querySelector('[data-act="submit"]'); btn.disabled = true; btn.textContent = "Đang gửi…";
-    Store.addOrder(order).then(function () {
+    function send() {
+    return Store.addOrder(order).then(function () {
       pushNotify(order);
       cart = {}; saveCart();
       $("#cartBody").setAttribute("data-view", "done");
@@ -228,11 +247,76 @@
         renderLastPay();
       }
       renderMenu(); renderCartBar();
-    }).catch(function (e) {
-      console.error(e);
-      btn.disabled = false; btn.textContent = "Hoàn tất đặt món";
-      alert("Chưa gửi được đơn, bạn thử lại hoặc gọi trực tiếp cho quán nhé.");
     });
+    }
+    function fail(e) {
+      console.error(e);
+      var b2 = document.querySelector('[data-act="submit"]');
+      if (b2) { b2.disabled = false; b2.textContent = "Hoàn tất đặt món"; }
+      renderCart();
+      alert("Chưa gửi được đơn, bạn thử lại hoặc gọi trực tiếp cho quán nhé.");
+    }
+    if (!(dine && tbl)) { send().catch(fail); return; }
+    /* Uống tại quán có số bàn: bàn phải được nhân viên/chủ quán mở trước */
+    Store.isTableOpen(tbl).then(function (open) {
+      if (open) return send();
+      return askOpenTable(tbl, name, send);
+    }).catch(fail);
+  }
+
+  /* ---------- Xin mở bàn ---------- */
+  var reqUnsub = null, reqSend = null;
+  function stopReq() { if (reqUnsub) { reqUnsub(); reqUnsub = null; } }
+  function askOpenTable(tbl, name, send) {
+    reqSend = send;
+    var fired = false;
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem("tra_req") || "null"); } catch (e) {}
+    var reuse = saved && saved.table === tbl && Date.now() - saved.at < 10 * 60 * 1000;
+    var get = reuse ? Promise.resolve(saved.id) : Store.requestTable({ table: tbl, status: "pending", createdAt: Date.now(), name: name.slice(0, 40) }).then(function (id) {
+      try { localStorage.setItem("tra_req", JSON.stringify({ id: id, table: tbl, at: Date.now() })); } catch (e) {}
+      pushTableReq(tbl, name);
+      return id;
+    });
+    return get.then(function (id) {
+      $("#cartBody").setAttribute("data-view", "req");
+      stopReq();
+      reqUnsub = Store.watchRequest(id, function (r) {
+        if ($("#cartBody").getAttribute("data-view") !== "req") return;
+        var head = '<button class="x" data-act="reqclose">✕</button>';
+        if (!r || r.status === "pending") {
+          $("#cartBody").innerHTML = head + '<div class="success"><div class="big">⏳</div><h2>Đang chờ mở ' + esc(Tables.label(tbl)) + "</h2>" +
+            "<p>" + esc(Tables.label(tbl)) + " chưa được mở nên quán cần xác nhận bạn đang ngồi bàn này. Đã gửi yêu cầu cho nhân viên, bạn giữ trang này mở nhé.<br>Món bạn chọn vẫn được giữ lại.</p>" +
+            '<button class="btn ghost block" data-act="reqcancel">Đổi số bàn / để trống bàn</button></div>';
+        } else if (r.status === "approved") {
+          stopReq();
+          if (fired) return; fired = true;
+          try { localStorage.removeItem("tra_req"); } catch (e) {}
+          $("#cartBody").innerHTML = head + '<div class="success"><div class="big">✅</div><h2>' + esc(Tables.label(tbl)) + " đã được mở</h2><p>Đang gửi món cho quán…</p></div>";
+          send().catch(function () {
+            fired = false;
+            $("#cartBody").innerHTML = head + '<div class="success"><div class="big">⚠️</div><h2>Chưa gửi được món</h2><p>Bạn bấm thử lại nhé.</p><button class="btn block" data-act="reqsend">Gửi lại</button></div>';
+          });
+        } else {
+          stopReq();
+          try { localStorage.removeItem("tra_req"); } catch (e) {}
+          cart = {}; saveCart(); renderMenu(); renderCartBar();
+          $("#cartBody").innerHTML = head + '<div class="success"><div class="big">🙏</div><h2>Đơn đã được huỷ</h2>' +
+            "<p>Quán chưa mở " + esc(Tables.label(tbl)) + " nên đơn của bạn không được gửi đi. Bạn kiểm tra lại số bàn hoặc gọi nhân viên giúp nhé.</p>" +
+            '<button class="btn block" data-act="close">Đóng</button></div>';
+        }
+      });
+    });
+  }
+  function pushTableReq(tbl, name) {
+    var topic = String(window.NTFY_TOPIC || "").trim();
+    if (!topic) return;
+    try {
+      fetch("https://ntfy.sh", { method: "POST", body: JSON.stringify({
+        topic: topic, title: "🪑 Khách xin mở " + Tables.label(tbl), message: (name || "Khách") + " đang chờ nhân viên xác nhận mở bàn.",
+        priority: 5, tags: ["bell"], click: new URL("staff.html", location.href).href
+      }) }).catch(function () {});
+    } catch (e) {}
   }
 
   /* ---------- Sự kiện ---------- */
@@ -249,7 +333,7 @@
     if (el.hasAttribute("data-cat")) { activeCat = el.getAttribute("data-cat"); renderMenu(); return; }
     var act = el.getAttribute("data-act"), id = el.getAttribute("data-id");
     if (act === "inc" && isOpen()) {
-      var it = itemById(id); if (!it || it.available === false) return;
+      var it = Tables.findVariant(shop.menu, id); if (!it || it.item.available === false) return;
       if (!cart[id]) cart[id] = { qty: 0, sugar: "100%", ice: "Đá bình thường" };
       cart[id].qty = Math.min(99, cart[id].qty + 1);
       saveCart(); renderMenu(); renderCartBar();
@@ -258,6 +342,12 @@
       saveCart(); renderMenu(); renderCartBar();
     } else if (act === "close") { $("#cartDlg").close(); }
     else if (act === "submit") { submitOrder(); }
+    else if (act === "reqsend") {
+      el.disabled = true; el.textContent = "Đang gửi…";
+      var fn = reqSend; if (fn) fn().catch(function () { alert("Chưa gửi được đơn, bạn thử lại nhé."); renderCart(); });
+    }
+    else if (act === "reqcancel") { stopReq(); try { localStorage.removeItem("tra_req"); } catch (x) {} renderCart(); }
+    else if (act === "reqclose") { stopReq(); $("#cartDlg").close(); }
   });
 
   document.addEventListener("change", function (e) {

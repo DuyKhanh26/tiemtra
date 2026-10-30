@@ -18,7 +18,7 @@
     isOpen: true,
     closedNote: "Quán đang nghỉ, hẹn gặp lại bạn sớm nhé!",
     menu: [
-      { id: "m1", name: "Trà đào cam sả", price: 35000, cat: "Trà trái cây", icon: "🍑", desc: "Trà đào thơm, cam tươi, sả", available: true },
+      { id: "m1", name: "Trà đào cam sả", price: 35000, priceM: 35000, priceL: 42000, best: true, cat: "Trà trái cây", icon: "🍑", desc: "Trà đào thơm, cam tươi, sả", available: true },
       { id: "m2", name: "Trà vải hoa hồng", price: 35000, cat: "Trà trái cây", icon: "🌹", desc: "Vị vải ngọt nhẹ, thoang thoảng hoa hồng", available: true },
       { id: "m3", name: "Trà Yaki matcha", price: 35000, cat: "Trà Yaki", icon: "🍵", desc: "Matcha đậm vị, béo nhẹ", available: true },
       { id: "m4", name: "Sữa chua dâu", price: 35000, cat: "Sữa chua", icon: "🍓", desc: "Sữa chua dẻo mịn với dâu tươi", available: true }
@@ -89,6 +89,24 @@
         }, Promise.resolve());
       },
       deleteOrder: function (id) { return db.collection("orders").doc(id).delete(); },
+      /* Mở bàn: bàn chỉ nhận món từ khách khi có tài liệu openTables/<số bàn> */
+      isTableOpen: function (t) { return db.doc("openTables/" + t).get().then(function (s) { return s.exists; }); },
+      openTable: function (t, by) { return db.doc("openTables/" + t).set({ table: t, openedAt: Date.now(), openedBy: by || "" }); },
+      closeTable: function (t) { return db.doc("openTables/" + t).delete(); },
+      requestTable: function (r) { return db.collection("tableRequests").add(r).then(function (d) { return d.id; }); },
+      watchRequest: function (id, cb) {
+        return db.doc("tableRequests/" + id).onSnapshot(function (s) { cb(s.exists ? s.data() : null); }, function () {});
+      },
+      subscribeRequests: function (cb) {
+        return db.collection("tableRequests").where("status", "==", "pending").onSnapshot(
+          function (sn) { cb(sn.docs.map(function (d) { var x = d.data(); x.id = d.id; return x; }).sort(function (a, b) { return a.createdAt - b.createdAt; })); },
+          function (e) { console.error(e); }
+        );
+      },
+      answerRequest: function (r, ok, by) {
+        var p = ok ? db.doc("openTables/" + r.table).set({ table: r.table, openedAt: Date.now(), openedBy: by || "" }) : Promise.resolve();
+        return p.then(function () { return db.doc("tableRequests/" + r.id).update({ status: ok ? "approved" : "rejected", handledBy: by || "", handledAt: Date.now() }); });
+      },
       onAuth: function (cb) {
         return auth.onAuthStateChanged(function (u) {
           cb(u ? { email: u.email || "", verified: !!u.emailVerified } : null);
@@ -155,6 +173,25 @@
       deleteOrder: function (id) {
         write("tra_orders", read("tra_orders", []).filter(function (o) { return o.id !== id; }));
         return Promise.resolve();
+      },
+      isTableOpen: function (t) { return Promise.resolve(!!read("tra_open", {})[t]); },
+      openTable: function (t, by) { var m = read("tra_open", {}); m[t] = { table: t, openedAt: Date.now(), openedBy: by || "" }; write("tra_open", m); return Promise.resolve(); },
+      closeTable: function (t) { var m = read("tra_open", {}); delete m[t]; write("tra_open", m); return Promise.resolve(); },
+      requestTable: function (r) {
+        var l = read("tra_requests", []), x = clone(r); x.id = "r" + Date.now() + Math.random().toString(36).slice(2, 6);
+        l.push(x); write("tra_requests", l); return Promise.resolve(x.id);
+      },
+      watchRequest: function (id, cb) {
+        return sub("tra_requests", function () { return read("tra_requests", []).filter(function (r) { return r.id === id; })[0] || null; }, cb);
+      },
+      subscribeRequests: function (cb) {
+        return sub("tra_requests", function () { return read("tra_requests", []).filter(function (r) { return r.status === "pending"; }); }, cb);
+      },
+      answerRequest: function (r, ok, by) {
+        if (ok) { var m = read("tra_open", {}); m[r.table] = { table: r.table, openedAt: Date.now(), openedBy: by || "" }; write("tra_open", m); }
+        var l = read("tra_requests", []);
+        l.forEach(function (x) { if (x.id === r.id) { x.status = ok ? "approved" : "rejected"; x.handledBy = by || ""; x.handledAt = Date.now(); } });
+        write("tra_requests", l); return Promise.resolve();
       },
       onAuth: function (cb) { return sub("tra_user", function () { return read("tra_user", null); }, cb); },
       login: function () {

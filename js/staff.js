@@ -13,7 +13,7 @@
   var startOfDay = function (ts) { var d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
   var me = null, shop = null, orders = [], cart = {}, tab = "orders";
-  var unsubShop = null, unsubOrders = null, loginMsg = "", checking = "", seen = null;
+  var unsubShop = null, unsubOrders = null, unsubReq = null, reqs = [], reqSeen = null, loginMsg = "", checking = "", seen = null;
   var baseTitle = "Nhân viên", soundOn = false, ac = null, wl = null;
   try { soundOn = localStorage.getItem("tra_sound") === "1"; } catch (e) {}
 
@@ -32,6 +32,7 @@
   function stop() {
     if (unsubShop) { unsubShop(); unsubShop = null; }
     if (unsubOrders) { unsubOrders(); unsubOrders = null; }
+    if (unsubReq) { unsubReq(); unsubReq = null; } reqs = []; reqSeen = null;
     me = null; shop = null; orders = []; cart = {}; seen = null;
   }
   function start(user) {
@@ -44,6 +45,18 @@
     });
     if (!unsubOrders) unsubOrders = Store.subscribeOrdersSince(startOfDay(Date.now()) - 86400000, function (list) {
       detectNew(list); orders = list; renderAll();
+    });
+    startReq();
+  }
+  function startReq() {
+    if (unsubReq) return;
+    unsubReq = Store.subscribeRequests(function (list) {
+      if (reqSeen === null) reqSeen = {};
+      var fresh = list.filter(function (r) { return !reqSeen[r.id]; });
+      list.forEach(function (r) { reqSeen[r.id] = 1; });
+      reqs = list;
+      if (fresh.length) { beep(); toast("🪑 Khách xin mở " + Tables.label(fresh[0].table)); }
+      renderTablesList();
     });
   }
   Store.onAuth(function (user) {
@@ -170,26 +183,32 @@
   /* ---------- Đặt món tại quầy ---------- */
   function availItems() { return shop ? (shop.menu || []).filter(function (m) { return m.available !== false; }) : []; }
   function pruneCart() {
-    var ids = {}; availItems().forEach(function (m) { ids[m.id] = 1; });
+    var ids = {}; availItems().forEach(function (m) { Tables.variants(m).forEach(function (v) { ids[v.key] = 1; }); });
     Object.keys(cart).forEach(function (k) { if (!ids[k]) delete cart[k]; });
   }
   function cartLines() {
-    return availItems().filter(function (m) { return cart[m.id] > 0; }).map(function (m) {
-      return { id: m.id, name: m.name, price: Number(m.price) || 0, qty: cart[m.id] };
+    var out = [];
+    availItems().forEach(function (m) {
+      Tables.variants(m).forEach(function (v) { if (cart[v.key] > 0) out.push({ id: v.id, key: v.key, size: v.size, name: v.name, price: v.price, qty: cart[v.key] }); });
     });
+    return out;
   }
   var nCat = "__all", nQ = "";
   function fold(t) { return String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").toLowerCase(); }
   function renderNew() {
-    var items = availItems(), cats = [], none = 0, selBy = {}, totalQty = 0;
+    var items = availItems(), cats = [], none = 0, selBy = {}, totalQty = 0, bestN = 0;
     items.forEach(function (m) {
-      var c = (m.cat || "").trim(), q = cart[m.id] || 0;
+      var c = (m.cat || "").trim(), q = 0;
+      Tables.variants(m).forEach(function (v) { q += cart[v.key] || 0; });
+      if (m.best) { bestN++; selBy.__best = (selBy.__best || 0) + q; }
       if (!c) none++; else if (cats.indexOf(c) < 0) cats.push(c);
       selBy[c || "__none"] = (selBy[c || "__none"] || 0) + q; totalQty += q;
     });
-    if (nCat !== "__all" && nCat !== "__none" && cats.indexOf(nCat) < 0) nCat = "__all";
+    if (nCat !== "__all" && nCat !== "__none" && nCat !== "__best" && cats.indexOf(nCat) < 0) nCat = "__all";
     if (nCat === "__none" && !none) nCat = "__all";
+    if (nCat === "__best" && !bestN) nCat = "__all";
     var chips = [{ k: "__all", t: "Tất cả", n: totalQty }];
+    if (bestN) chips.push({ k: "__best", t: "⭐ Best-Seller", n: selBy.__best });
     cats.forEach(function (c) { chips.push({ k: c, t: c, n: selBy[c] }); });
     if (none && cats.length) chips.push({ k: "__none", t: "Khác", n: selBy.__none });
     $("#nCats").innerHTML = chips.length > 1 ? chips.map(function (c) {
@@ -200,17 +219,21 @@
     var list = items.filter(function (m) {
       var c = (m.cat || "").trim();
       if (q) return fold(m.name).indexOf(q) >= 0;   // đang tìm: tìm trong toàn bộ thực đơn
+      if (nCat === "__best") return !!m.best;
       if (nCat === "__none") return !c;
       return nCat === "__all" || c === nCat;
     });
-    var html = "", lastCat = null, heads = nCat === "__all" && !q;
+    var html = "", lastCat = null, heads = (nCat === "__all" || nCat === "__best") && !q;
     list.forEach(function (m) {
       var cat = (m.cat || "").trim();
-      if (heads && cat !== lastCat) { if (cat) html += '<div class="catline">' + esc(cat) + "</div>"; lastCat = cat; }
-      var n = cart[m.id] || 0;
-      html += '<div class="stepper-row"><span>' + esc(m.name) + '<br><small style="color:var(--muted)">' + money(m.price) + "</small></span><div class=\"qty\">" +
-        (n ? '<button class="minus" data-n="dec" data-id="' + esc(m.id) + '">−</button><span>' + n + "</span>" : "") +
-        '<button data-n="inc" data-id="' + esc(m.id) + '">+</button></div></div>';
+      if (heads && nCat !== "__best" && cat !== lastCat) { if (cat) html += '<div class="catline">' + esc(cat) + "</div>"; lastCat = cat; }
+      Tables.variants(m).forEach(function (v) {
+        var n = cart[v.key] || 0;
+        html += '<div class="stepper-row"><span>' + esc(m.name) + Tables.starHtml(m) + (v.size ? ' <span class="szb">' + esc(v.size) + "</span>" : "") +
+          '<br><small style="color:var(--muted)">' + money(v.price) + "</small></span><div class=\"qty\">" +
+          (n ? '<button class="minus" data-n="dec" data-id="' + esc(v.key) + '">−</button><span>' + n + "</span>" : "") +
+          '<button data-n="inc" data-id="' + esc(v.key) + '">+</button></div></div>';
+      });
     });
     $("#newMenu").innerHTML = html || '<div style="color:var(--muted);padding:12px;text-align:center">' + (items.length ? "Không có món nào khớp." : "Chưa có món nào đang bán.") + "</div>";
 
@@ -244,11 +267,11 @@
       code: code, source: "staff", status: "new", createdAt: Date.now(), createdBy: me.email,
       customer: { name: $("#nName").value.trim() || "Khách tại quán", phone: "" },
       method: $("#nMethod").value, address: "", note: $("#nNote").value.trim(), total: total,
-      items: lines.map(function (l) { return { id: l.id, name: l.name, price: l.price, qty: l.qty }; })
+      items: lines.map(function (l) { var it = { id: l.id, name: l.name, price: l.price, qty: l.qty }; if (l.size) it.size = l.size; return it; })
     };
     if (tbl) { order.table = tbl; order.billStatus = "open"; }
     var btn = this; btn.disabled = true; btn.textContent = "Đang tạo…";
-    Store.addOrder(order).then(function () {
+    (tbl ? Store.openTable(tbl, me.email) : Promise.resolve()).then(function () { return Store.addOrder(order); }).then(function () {
       cart = {}; $("#nName").value = ""; $("#nNote").value = ""; $("#nTable").value = ""; $("#nSearch").value = ""; nQ = ""; renderNew();
       var dine = !!order.table;
       $("#dlgBody").innerHTML = '<button class="x" data-d="close">✕</button><div class="success"><div class="big">✅</div><h2>Đã tạo đơn #' + esc(code) + "</h2><p>" + money(total) + " · " + esc(order.method) +
@@ -270,17 +293,20 @@
   var billUI = null;
   function renderTablesList() {
     var gs = Tables.group(orders);
-    $("#tables").innerHTML = Tables.cardsHtml(gs);
-    var tb = $("#tblBadge"); tb.textContent = gs.length; tb.classList.toggle("hidden", gs.length === 0);
+    $("#tables").innerHTML = Tables.reqHtml(reqs) + Tables.cardsHtml(gs);
+    var tb = $("#tblBadge"); tb.textContent = gs.length + reqs.length; tb.classList.toggle("hidden", gs.length + reqs.length === 0);
     $("#nTables").innerHTML = gs.map(function (g) { return '<option value="' + esc(g.table) + '">'; }).join("");
   }
   $("#tables").addEventListener("click", function (e) {
-    var b = e.target.closest("[data-bill-open]"); if (!b) return;
-    var g = Tables.group(orders).filter(function (x) { return x.table === b.getAttribute("data-bill-open"); })[0];
+    var b = e.target.closest("[data-bill-open],[data-move-open]"); if (!b) return;
+    var tb0 = b.getAttribute("data-bill-open") || b.getAttribute("data-move-open"), gs = Tables.group(orders);
+    var g = gs.filter(function (x) { return x.table === tb0; })[0];
     if (!g) return;
     if (!billUI) billUI = Tables.createBillUI({ dlg: $("#billDlg"), body: $("#billBody"), email: function () { return me.email; }, toast: toast });
-    billUI.open(g);
+    billUI.open(g, gs, b.hasAttribute("data-move-open") ? "move" : "bill");
   });
+  Tables.bindRequests($("#tables"), function () { return reqs; }, function () { return me.email; }, toast);
+  Tables.bindManualOpen($("#openTblIn"), $("#openTblBtn"), function () { return me.email; }, toast);
   $("#nMethod").addEventListener("change", function () { $("#nTableBox").classList.toggle("hidden", this.value !== "Uống tại quán"); });
 
   function renderAll() { renderOrders(); renderTablesList(); renderNew(); }
