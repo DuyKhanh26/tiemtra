@@ -89,3 +89,6 @@ Chủ quán chính (đăng nhập `duykhanh2605.pq@gmail.com`) vào **Nhân viê
 ## Huỷ đơn và xoá đơn
 - **Huỷ đơn** (khách/nhân viên chọn nhầm): nhân viên, chủ quán và chủ quán phụ đều bấm được; đơn chuyển sang "Đã huỷ", không tính doanh thu và hiện "Huỷ bởi <tên>".
 - **Xoá đơn** (xoá hẳn): chỉ chủ quán chính, để phòng người phá đơn. Cần dán lại firestore.rules và Publish.
+
+## Hết món theo size
+Nhân viên (tab Đặt món) và chủ quán/chủ quán phụ (Thực đơn → mở món → "Còn bán hôm nay") bật/tắt từng size M/L hoặc cả món. Áp dụng ngay cho trang khách (hiện "Hết"), không cần bấm Lưu. Cần dán lại firestore.rules và Publish.

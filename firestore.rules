@@ -43,6 +43,16 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
+    // Hết món theo size: ai cũng xem được; chủ quán và nhân viên bật/tắt được
+    match /soldOut/{doc} {
+      allow read: if true;
+      allow create, update: if (isOwner() || isStaff())
+        && request.resource.data.keys().hasOnly(['off', 'updatedAt', 'updatedBy'])
+        && request.resource.data.off is list
+        && request.resource.data.off.size() <= 300;
+      allow delete: if isOwner();
+    }
+
     // Bàn đang mở: khách chỉ kiểm tra được từng bàn (không liệt kê được); nhân viên/chủ quán mở & đóng bàn
     match /openTables/{t} {
       allow get: if true;
