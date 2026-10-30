@@ -16,9 +16,9 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/owners/$(request.auth.token.email.lower())));
     }
 
-    // Chủ quán phụ: chỉ chủ chính quản lý; mỗi người đọc được tài liệu của chính mình
+    // Chủ quán phụ: chỉ chủ chính quản lý; chủ quán xem được danh sách để hiện tên; mỗi người đọc được tài liệu của chính mình
     match /owners/{id} {
-      allow read: if isMainOwner()
+      allow read: if isOwner()
         || (request.auth != null && request.auth.token.email.lower() == id);
       allow write: if isMainOwner();
     }
@@ -88,6 +88,14 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['billStatus', 'paidAt', 'paidBy', 'payMethod', 'billCode']);
       }
 
+      // Nhân viên: huỷ đơn đang chờ (chọn nhầm...), bắt buộc ghi tên người huỷ
+      function staffCancel() {
+        return resource.data.status == 'new'
+          && request.resource.data.status == 'cancelled'
+          && request.resource.data.cancelledBy == request.auth.token.email.lower()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'cancelledBy']);
+      }
+
       // Nhân viên: xác nhận khách đã thanh toán đơn mang đi/giao (chỉ bật lên, không tắt được)
       function staffPaid() {
         return request.resource.data.orderPaid == true
@@ -116,9 +124,9 @@ service cloud.firestore {
       // Chủ quán và nhân viên được xem đơn
       allow read: if isOwner() || isStaff();
       // Nhân viên CHỈ được: xong đơn, tính tiền bàn, chuyển bàn, hoặc xác nhận khách đã thanh toán (không sửa món/giá, không huỷ, không mở lại)
-      allow update: if isOwner() || (isStaff() && (staffDone() || staffPay() || staffMove() || staffPaid()));
-      // Chỉ chủ quán được xoá đơn
-      allow delete: if isOwner();
+      allow update: if isOwner() || (isStaff() && (staffDone() || staffPay() || staffMove() || staffPaid() || staffCancel()));
+      // Chỉ chủ quán CHÍNH được xoá hẳn đơn (chủ phụ và nhân viên dùng "Huỷ đơn")
+      allow delete: if isMainOwner();
     }
   }
 }

@@ -85,3 +85,7 @@ Mở `js/firebase-config.js`, bỏ dấu `//` ở khối `window.FIREBASE_CONFIG
 
 ## Thêm chủ quán phụ
 Chủ quán chính (đăng nhập `duykhanh2605.pq@gmail.com`) vào **Nhân viên → Chủ quán phụ** để thêm Gmail. Người đó đăng nhập tại `admin.html` với quyền như chủ quán, trừ việc thêm/xoá chủ quán phụ. Cần dán lại firestore.rules và Publish.
+
+## Huỷ đơn và xoá đơn
+- **Huỷ đơn** (khách/nhân viên chọn nhầm): nhân viên, chủ quán và chủ quán phụ đều bấm được; đơn chuyển sang "Đã huỷ", không tính doanh thu và hiện "Huỷ bởi <tên>".
+- **Xoá đơn** (xoá hẳn): chỉ chủ quán chính, để phòng người phá đơn. Cần dán lại firestore.rules và Publish.
