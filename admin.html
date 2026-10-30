@@ -97,6 +97,14 @@
           <button class="btn block" id="stAdd" style="margin-top:14px">+ Thêm nhân viên</button>
         </div>
         <div class="card"><h3>Danh sách nhân viên</h3><div id="stList"></div></div>
+        <div class="card hidden" id="ownerCard">
+          <h3>Chủ quán phụ</h3>
+          <p style="color:var(--muted);font-size:13px;margin:2px 0 6px">Người được thêm ở đây đăng nhập Gmail tại trang này và có quyền như chủ quán (sửa thực đơn, xem doanh thu, xoá đơn…). Chỉ chủ quán chính mới thấy mục này. Thêm/xoá có hiệu lực ngay.</p>
+          <label class="f">Gmail của chủ quán phụ</label><input id="owEmail" type="email" inputmode="email" autocapitalize="off" placeholder="chuquanphu@gmail.com">
+          <label class="f">Tên gọi</label><input id="owName" placeholder="Ví dụ: Vợ / Anh Hai">
+          <button class="btn block" id="owAdd" style="margin-top:14px">+ Thêm chủ quán phụ</button>
+          <div id="owList" style="margin-top:10px"></div>
+        </div>
         <div class="card">
           <h3>Link trang nhân viên</h3>
           <input id="stLink" readonly style="margin-top:8px">

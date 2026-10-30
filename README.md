@@ -82,3 +82,6 @@ Mở `js/firebase-config.js`, bỏ dấu `//` ở khối `window.FIREBASE_CONFIG
 
 ## Nút "Đã thanh toán" cho đơn mang đi/giao
 Đơn không ngồi bàn hiện nhãn ⏳ Chưa thanh toán / ✅ Đã thanh toán. Nhân viên và chủ quán bấm "💰 Đã thanh toán" khi tiền đã về (nhân viên không bỏ được dấu này, chủ quán có nút "Bỏ đã thanh toán"). Không ảnh hưởng doanh thu. Cần dán lại firestore.rules và Publish.
+
+## Thêm chủ quán phụ
+Chủ quán chính (đăng nhập `duykhanh2605.pq@gmail.com`) vào **Nhân viên → Chủ quán phụ** để thêm Gmail. Người đó đăng nhập tại `admin.html` với quyền như chủ quán, trừ việc thêm/xoá chủ quán phụ. Cần dán lại firestore.rules và Publish.

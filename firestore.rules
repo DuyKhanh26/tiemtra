@@ -2,11 +2,25 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Chủ quán: đúng tài khoản Google đã xác minh email
-    function isOwner() {
+    // Chủ quán CHÍNH: đúng tài khoản Google đã xác minh email (chỉ người này thêm/xoá chủ quán phụ)
+    function isMainOwner() {
       return request.auth != null
         && request.auth.token.email == 'duykhanh2605.pq@gmail.com'
         && request.auth.token.email_verified == true;
+    }
+
+    // Chủ quán: chủ chính hoặc chủ quán phụ (có tài liệu owners/<email viết thường>)
+    function isOwner() {
+      return isMainOwner() || (request.auth != null
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/owners/$(request.auth.token.email.lower())));
+    }
+
+    // Chủ quán phụ: chỉ chủ chính quản lý; mỗi người đọc được tài liệu của chính mình
+    match /owners/{id} {
+      allow read: if isMainOwner()
+        || (request.auth != null && request.auth.token.email.lower() == id);
+      allow write: if isMainOwner();
     }
 
     // Nhân viên: có tài liệu staff/<email viết thường> do chủ quán tạo
