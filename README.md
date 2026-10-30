@@ -79,3 +79,6 @@ Mở `js/firebase-config.js`, bỏ dấu `//` ở khối `window.FIREBASE_CONFIG
 - Nhân viên/chủ quán duyệt ở tab **Bàn** (nút ✓ Mở bàn / Từ chối) hoặc tự mở bàn bằng ô "Mở bàn cho khách vừa vào".
 - Nhân viên tạo đơn tại quầy với số bàn thì bàn tự mở. Bàn tự đóng khi bấm "Tính tiền"; chuyển bàn thì bàn mới mở, bàn cũ đóng.
 - Quy tắc này được kiểm tra ở cả máy chủ (firestore.rules), nên khách không thể tự ý gửi đơn vào bàn chưa mở. Cần dán lại firestore.rules và Publish.
+
+## Nút "Đã thanh toán" cho đơn mang đi/giao
+Đơn không ngồi bàn hiện nhãn ⏳ Chưa thanh toán / ✅ Đã thanh toán. Nhân viên và chủ quán bấm "💰 Đã thanh toán" khi tiền đã về (nhân viên không bỏ được dấu này, chủ quán có nút "Bỏ đã thanh toán"). Không ảnh hưởng doanh thu. Cần dán lại firestore.rules và Publish.

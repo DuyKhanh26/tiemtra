@@ -74,6 +74,13 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['billStatus', 'paidAt', 'paidBy', 'payMethod', 'billCode']);
       }
 
+      // Nhân viên: xác nhận khách đã thanh toán đơn mang đi/giao (chỉ bật lên, không tắt được)
+      function staffPaid() {
+        return request.resource.data.orderPaid == true
+          && (!('orderPaid' in resource.data) || resource.data.orderPaid == false)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['orderPaid', 'orderPaidAt', 'orderPaidBy']);
+      }
+
       // Nhân viên: chuyển/gộp bàn (chỉ đổi số bàn của đơn chưa tính tiền, có ghi vết)
       function staffMove() {
         return resource.data.billStatus == 'open'
@@ -94,8 +101,8 @@ service cloud.firestore {
       );
       // Chủ quán và nhân viên được xem đơn
       allow read: if isOwner() || isStaff();
-      // Nhân viên CHỈ được: xong đơn, tính tiền bàn, hoặc chuyển bàn (không sửa món/giá, không huỷ, không mở lại)
-      allow update: if isOwner() || (isStaff() && (staffDone() || staffPay() || staffMove()));
+      // Nhân viên CHỈ được: xong đơn, tính tiền bàn, chuyển bàn, hoặc xác nhận khách đã thanh toán (không sửa món/giá, không huỷ, không mở lại)
+      allow update: if isOwner() || (isStaff() && (staffDone() || staffPay() || staffMove() || staffPaid()));
       // Chỉ chủ quán được xoá đơn
       allow delete: if isOwner();
     }
