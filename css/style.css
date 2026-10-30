@@ -236,3 +236,10 @@ footer.foot { text-align: center; color: var(--muted); font-size: 13px; padding:
 .item.off .szs .qty { display: none; }
 .tagx.paid { background: #d9f3e3; color: #1c7a43; }
 .tagx.unpaid { background: #fff0d6; color: #a86400; }
+
+/* Hết món theo size */
+.szoff .szn, .szoff .szp { opacity: .45; text-decoration: line-through; }
+.rowoff > span:first-child { opacity: .5; }
+.soldctl { display: flex; align-items: center; gap: 10px; }
+.soldrow { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px; }
+.soldopt { display: flex; align-items: center; gap: 8px; font-weight: 600; }
